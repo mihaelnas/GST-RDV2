@@ -51,12 +51,17 @@ export default function RegisterPage() {
 
   const onSubmit = (data: RegisterFormValues) => {
     console.log("Registration data:", data);
+
     if (data.role === "patient") {
       alert("Inscription réussie ! Vous allez être redirigé et connecté en tant que patient.");
-    } else {
-      alert(`Demande d'inscription en tant que ${data.role === "medecin" ? "Médecin" : "Personnel de la clinique"} reçue. Votre compte nécessitera une validation par la clinique avant d'être pleinement activé. Vous serez redirigé.`);
+      router.push('/?loggedIn=true');
+    } else if (data.role === "medecin") {
+      alert(`Demande d'inscription en tant que Médecin reçue. Votre compte nécessitera une validation par la clinique. Vous serez redirigé vers votre tableau de bord.`);
+      router.push('/doctor/dashboard');
+    } else if (data.role === "personnel_clinique") {
+      alert(`Demande d'inscription en tant que Personnel de la clinique reçue. Votre compte nécessitera une validation. Vous serez redirigé vers votre tableau de bord.`);
+      router.push('/clinic-staff/dashboard');
     }
-    router.push('/?loggedIn=true');
   };
 
   return (

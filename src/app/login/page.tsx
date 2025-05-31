@@ -34,9 +34,19 @@ export default function LoginPage() {
 
   const onSubmit = (data: LoginFormValues) => {
     console.log("Login data:", data);
-    // Simulation de connexion réussie
-    alert("Connexion simulée réussie ! Vous allez être redirigé.");
-    router.push('/?loggedIn=true');
+    // Simulation de connexion réussie et redirection basée sur le rôle (simulé par email)
+    const email = data.email.toLowerCase();
+
+    if (email.includes("medecin@") || email.includes("doctor@")) {
+      alert("Connexion simulée réussie en tant que Médecin ! Vous allez être redirigé vers votre tableau de bord.");
+      router.push('/doctor/dashboard');
+    } else if (email.includes("personnel@") || email.includes("staff@")) {
+      alert("Connexion simulée réussie en tant que Personnel de la clinique ! Vous allez être redirigé vers votre tableau de bord.");
+      router.push('/clinic-staff/dashboard');
+    } else {
+      alert("Connexion simulée réussie en tant que Patient ! Vous allez être redirigé.");
+      router.push('/?loggedIn=true'); // Comportement par défaut pour les patients
+    }
   };
 
   return (
