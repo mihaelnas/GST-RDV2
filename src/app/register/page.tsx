@@ -43,13 +43,19 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register, handleSubmit, control, formState: { errors } } = useForm<RegisterFormValues>({
+  const { register, handleSubmit, control, formState: { errors, dirtyFields }, watch } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
   });
 
+  const selectedRole = watch("role");
+
   const onSubmit = (data: RegisterFormValues) => {
     console.log("Registration data:", data);
-    alert("Inscription simulée réussie ! Vous allez être redirigé et 'connecté'.");
+    if (data.role === "patient") {
+      alert("Inscription réussie ! Vous allez être redirigé et connecté en tant que patient.");
+    } else {
+      alert(`Demande d'inscription en tant que ${data.role === "medecin" ? "Médecin" : "Personnel de la clinique"} reçue. Votre compte nécessitera une validation par la clinique avant d'être pleinement activé. Vous serez redirigé.`);
+    }
     router.push('/?loggedIn=true');
   };
 
@@ -113,6 +119,11 @@ export default function RegisterPage() {
                 )}
               />
               {errors.role && <p className="text-sm text-destructive">{errors.role.message}</p>}
+              { (dirtyFields.role && (selectedRole === "medecin" || selectedRole === "personnel_clinique")) && (
+                <p className="text-xs text-muted-foreground pt-1 px-1">
+                  Note : Les comptes pour les rôles Médecin et Personnel de la clinique nécessitent une validation par l'administration avant d'être pleinement activés.
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Mot de passe</Label>
@@ -156,3 +167,4 @@ export default function RegisterPage() {
     </div>
   );
 }
+
