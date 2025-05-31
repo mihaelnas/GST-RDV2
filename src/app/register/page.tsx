@@ -9,6 +9,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,7 @@ import { Stethoscope, UserPlus } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { useRouter } from 'next/navigation'; // Importer useRouter
 
 const registerSchema = z.object({
   fullName: z.string().min(1, { message: "Le nom complet est requis." }),
@@ -24,30 +26,32 @@ const registerSchema = z.object({
   confirmPassword: z.string(),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Les mots de passe ne correspondent pas.",
-  path: ["confirmPassword"], // path of error
+  path: ["confirmPassword"],
 });
 
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
+  const router = useRouter(); // Initialiser useRouter
   const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
   });
 
   const onSubmit = (data: RegisterFormValues) => {
     console.log("Registration data:", data);
-    // Ici, vous intégreriez la logique d'inscription avec votre backend
-    alert("Fonctionnalité d'inscription non implémentée (pas de backend).");
+    // Simulation d'inscription réussie
+    alert("Inscription simulée réussie ! Vous allez être redirigé et 'connecté'.");
+    router.push('/?loggedIn=true'); // Rediriger vers la page d'accueil avec le flag
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      <div className="flex items-center justify-center gap-3 mb-8">
-        <Stethoscope className="h-10 w-10 text-primary" />
-        <h1 className="text-4xl font-headline font-bold text-primary drop-shadow-sm">
+      <Link href="/" className="flex items-center justify-center gap-3 mb-8 text-primary hover:text-primary/90">
+        <Stethoscope className="h-10 w-10" />
+        <h1 className="text-4xl font-headline font-bold drop-shadow-sm">
           Clinique Rendez-Vous
         </h1>
-      </div>
+      </Link>
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-3xl font-bold flex items-center justify-center gap-2">

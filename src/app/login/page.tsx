@@ -9,6 +9,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,7 @@ import { Stethoscope, LogIn } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { useRouter } from 'next/navigation'; // Importer useRouter
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Adresse e-mail invalide." }),
@@ -25,24 +27,26 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
+  const router = useRouter(); // Initialiser useRouter
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
   });
 
   const onSubmit = (data: LoginFormValues) => {
     console.log("Login data:", data);
-    // Ici, vous intégreriez la logique d'authentification avec votre backend
-    alert("Fonctionnalité de connexion non implémentée (pas de backend).");
+    // Simulation de connexion réussie
+    alert("Connexion simulée réussie ! Vous allez être redirigé.");
+    router.push('/?loggedIn=true'); // Rediriger vers la page d'accueil avec le flag
   };
 
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
-      <div className="flex items-center justify-center gap-3 mb-8">
-        <Stethoscope className="h-10 w-10 text-primary" />
-        <h1 className="text-4xl font-headline font-bold text-primary drop-shadow-sm">
+      <Link href="/" className="flex items-center justify-center gap-3 mb-8 text-primary hover:text-primary/90">
+        <Stethoscope className="h-10 w-10" />
+        <h1 className="text-4xl font-headline font-bold drop-shadow-sm">
           Clinique Rendez-Vous
         </h1>
-      </div>
+      </Link>
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-3xl font-bold flex items-center justify-center gap-2">
@@ -69,9 +73,9 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Mot de passe</Label>
-                <Link href="#" className="text-sm text-primary hover:underline">
+                {/* <Link href="#" className="text-sm text-primary hover:underline">
                   Mot de passe oublié ?
-                </Link>
+                </Link> */}
               </div>
               <Input
                 id="password"
