@@ -9,9 +9,9 @@ import {
   AlertDialogCancel, 
   AlertDialogContent, 
   AlertDialogDescription, 
+  AlertDialogFooter,
   AlertDialogHeader, 
-  AlertDialogTitle,
-  AlertDialogFooter
+  AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 import { Clock, CalendarDays, CheckCircle2, Info, CalendarCheck, CalendarX } from 'lucide-react';
 import { format } from 'date-fns';
@@ -38,7 +38,6 @@ const generateInitialAppointments = (): Appointment[] => {
     for (let minute = 0; minute < 60; minute += interval) {
       const slotTime = new Date(today);
       slotTime.setHours(hour, minute, 0, 0);
-      // Ensure slots are in the future for today
       if (slotTime.getTime() > new Date().getTime()) {
         appointments.push({
           id: `${hour.toString().padStart(2, '0')}${minute.toString().padStart(2, '0')}`,
@@ -59,7 +58,6 @@ export default function AppointmentScheduler() {
   const [showDialog, setShowDialog] = useState(false);
   const { toast } = useToast();
 
-  // For animation hints
   const [animateId, setAnimateId] = useState<string | null>(null);
   const [animationType, setAnimationType] = useState<'booked' | 'cancelled' | null>(null);
 
@@ -109,7 +107,7 @@ export default function AppointmentScheduler() {
     setTimeout(() => {
       setAnimateId(null);
       setAnimationType(null);
-    }, 600); // Duration of animation
+    }, 600); 
 
     setShowDialog(false);
     setSelectedAppointment(null);
@@ -197,8 +195,8 @@ export default function AppointmentScheduler() {
                   <CardDescription>{format(app.dateTime, 'PPPP', { locale: fr })}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex items-center">
-                  <CheckCircle2 className="mr-2 h-5 w-5 text-green-500" />
-                  <p className="text-sm font-semibold text-green-600">Confirmé</p>
+                  <CheckCircle2 className="mr-2 h-5 w-5 text-accent" />
+                  <p className="text-sm font-semibold text-accent">Confirmé</p>
                 </CardContent>
                 <CardFooter>
                   <Button 
