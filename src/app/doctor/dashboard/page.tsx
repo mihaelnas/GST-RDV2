@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { BarChart, CalendarDays, FileText, Settings, Users, CalendarPlus, CalendarX } from 'lucide-react';
+import { BarChart, CalendarDays, FileText, Settings, Users, CalendarPlus, CalendarX, ArrowLeft } from 'lucide-react';
 
 export default function DoctorDashboardPage() {
   const router = useRouter();
@@ -16,14 +16,6 @@ export default function DoctorDashboardPage() {
   const handleLogout = () => {
     setIsLoggedIn(false); 
     router.push('/'); 
-  };
-
-  const handleAddAvailability = () => {
-    alert("Fonctionnalité 'Ajouter une disponibilité' non implémentée.");
-  };
-
-  const handleDeleteAvailability = () => {
-    alert("Fonctionnalité 'Supprimer une disponibilité' non implémentée.");
   };
 
   return (
@@ -43,7 +35,9 @@ export default function DoctorDashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">Consultez votre planning de consultations.</p>
-              <Button className="w-full" onClick={() => alert("Redirection vers la page de gestion des rendez-vous du médecin (non implémentée).")}>Voir mes rendez-vous</Button>
+              <Button className="w-full" asChild>
+                <Link href="/doctor/appointments">Voir mes rendez-vous</Link>
+              </Button>
             </CardContent>
           </Card>
 
@@ -54,10 +48,11 @@ export default function DoctorDashboardPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground mb-2">Ajoutez ou supprimez vos créneaux de consultation.</p>
-              <Button className="w-full" onClick={handleAddAvailability}>Ajouter une disponibilité</Button>
-              <Button className="w-full" variant="outline" onClick={handleDeleteAvailability}>
-                <CalendarX className="mr-2 h-4 w-4"/>
-                Supprimer une disponibilité
+              <Button className="w-full" asChild>
+                <Link href="/doctor/availability">
+                    <CalendarPlus className="mr-2 h-4 w-4"/>
+                    Gérer les disponibilités
+                </Link>
               </Button>
             </CardContent>
           </Card>
@@ -69,7 +64,9 @@ export default function DoctorDashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">Accédez aux dossiers médicaux de vos patients.</p>
-              <Button className="w-full" onClick={() => alert("Redirection vers la gestion des dossiers patients (non implémentée).")}>Consulter les dossiers</Button>
+              <Button className="w-full" asChild>
+                <Link href="/doctor/patients">Consulter les dossiers</Link>
+              </Button>
             </CardContent>
           </Card>
 
@@ -80,7 +77,9 @@ export default function DoctorDashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">Générez et consultez les prescriptions.</p>
-              <Button className="w-full" onClick={() => alert("Redirection vers la gestion des prescriptions (non implémentée).")}>Gérer les prescriptions</Button>
+              <Button className="w-full" asChild>
+                <Link href="/doctor/prescriptions">Gérer les prescriptions</Link>
+              </Button>
             </CardContent>
           </Card>
           
@@ -102,14 +101,16 @@ export default function DoctorDashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">Mettez à jour vos informations personnelles.</p>
-              <Button className="w-full" variant="outline" onClick={() => alert("Redirection vers la page de profil (non implémentée).")}>Modifier mon profil</Button>
+              <Button className="w-full" variant="outline" asChild>
+                <Link href="/doctor/profile">Modifier mon profil</Link>
+              </Button>
             </CardContent>
           </Card>
         </div>
 
         <CardFooter className="mt-10 text-center border-t pt-6">
             <Button variant="link" asChild>
-                <Link href="/">Retour à l'accueil principal</Link>
+                <Link href="/"> <ArrowLeft className="mr-2 h-4 w-4"/>Retour à l'accueil principal</Link>
             </Button>
         </CardFooter>
       </main>
