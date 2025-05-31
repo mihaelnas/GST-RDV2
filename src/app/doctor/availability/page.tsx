@@ -8,45 +8,112 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { CalendarPlus, ArrowLeft, Trash2, Clock, CheckCircle } from 'lucide-react';
-import { useForm, SubmitHandler } from 'react-hook-form';
+import { useState, useEffect } from 'react';
+import { CalendarPlus, ArrowLeft, Trash2, Clock, CheckCircle, ListChecks, CalendarOff, Save } from 'lucide-react';
+import { useForm, SubmitHandler, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Textarea } from '@/components/ui/textarea';
 
-const availabilitySchema = z.object({
-  date: z.string().min(1, { message: "La date est requise."}),
-  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Format HH:MM requis."}),
-  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Format HH:MM requis."}),
+const dayOfWeekSchema = z.object({
+  dayName: z.string(),
+  isWorkingDay: z.boolean(),
+  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "HH:MM" }).optional().or(z.literal('')),
+  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "HH:MM" }).optional().or(z.literal('')),
+}).refine(data => {
+  if (data.isWorkingDay) {
+    return data.startTime && data.endTime && data.startTime < data.endTime;
+  }
+  return true;
+}, {
+  message: "L'heure de début doit être avant l'heure de fin.",
+  path: ["startTime"], // Or apply to endTime or a general form error
 });
 
-type AvailabilityFormValues = z.infer<typeof availabilitySchema>;
+const weeklyScheduleSchema = z.object({
+  schedule: z.array(dayOfWeekSchema),
+});
 
-interface AvailabilitySlot {
+type WeeklyScheduleFormValues = z.infer<typeof weeklyScheduleSchema>;
+
+const absenceSchema = z.object({
+  date: z.string().min(1, { message: "La date est requise."}),
+  isFullDay: z.boolean(),
+  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Format HH:MM requis."}).optional().or(z.literal('')),
+  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Format HH:MM requis."}).optional().or(z.literal('')),
+  reason: z.string().optional(),
+}).refine(data => {
+  if (!data.isFullDay) {
+    return data.startTime && data.endTime && data.startTime < data.endTime;
+  }
+  return true;
+}, {
+  message: "Pour une absence partielle, l'heure de début doit être avant l'heure de fin.",
+  path: ["startTime"],
+});
+
+type AbsenceFormValues = z.infer<typeof absenceSchema>;
+
+interface Absence extends AbsenceFormValues {
   id: string;
-  date: string;
-  startTime: string;
-  endTime: string;
 }
 
-const initialAvailabilities: AvailabilitySlot[] = [
-  { id: 'avail1', date: '2024-08-05', startTime: '09:00', endTime: '12:00' },
-  { id: 'avail2', date: '2024-08-05', startTime: '14:00', endTime: '17:00' },
-  { id: 'avail3', date: '2024-08-06', startTime: '10:00', endTime: '13:00' },
+const daysOfWeek = [
+  { name: "Lundi", index: 1 },
+  { name: "Mardi", index: 2 },
+  { name: "Mercredi", index: 3 },
+  { name: "Jeudi", index: 4 },
+  { name: "Vendredi", index: 5 },
+  { name: "Samedi", index: 6 },
+  { name: "Dimanche", index: 0 },
 ];
+
+const initialWeeklySchedule: WeeklyScheduleFormValues = {
+  schedule: daysOfWeek.map(day => ({
+    dayName: day.name,
+    isWorkingDay: true, // Par défaut disponible tous les jours
+    startTime: "", // Le médecin doit les remplir
+    endTime: "",
+  })),
+};
+
+// Exemple: Dr. Exemple est disponible L-V 09:00-12:00 et 14:00-17:00
+const exampleWeeklySchedule: WeeklyScheduleFormValues = {
+  schedule: daysOfWeek.map(day => {
+    const isWeekend = day.name === "Samedi" || day.name === "Dimanche";
+    return {
+      dayName: day.name,
+      isWorkingDay: !isWeekend,
+      startTime: !isWeekend ? "09:00" : "",
+      endTime: !isWeekend ? "17:00" : "",
+    };
+  }),
+};
 
 
 export default function DoctorAvailabilityPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoggedIn, setIsLoggedIn] = useState(true); 
-  const [availabilities, setAvailabilities] = useState<AvailabilitySlot[]>(initialAvailabilities);
+  
+  const [absences, setAbsences] = useState<Absence[]>([]);
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<AvailabilityFormValues>({
-    resolver: zodResolver(availabilitySchema),
+  const { control: weeklyControl, register: weeklyRegister, handleSubmit: handleWeeklySubmit, formState: { errors: weeklyErrors }, reset: weeklyReset } = useForm<WeeklyScheduleFormValues>({
+    resolver: zodResolver(weeklyScheduleSchema),
+    defaultValues: exampleWeeklySchedule, // Using example for a more filled-out default
+  });
+  const { fields: weeklyFields } = useFieldArray({
+    control: weeklyControl,
+    name: "schedule",
+  });
+
+  const { control: absenceControl, register: absenceRegister, handleSubmit: handleAbsenceSubmit, formState: { errors: absenceErrors }, reset: absenceReset } = useForm<AbsenceFormValues>({
+    resolver: zodResolver(absenceSchema),
+    defaultValues: { isFullDay: true },
   });
 
   const handleLogout = () => {
@@ -54,27 +121,37 @@ export default function DoctorAvailabilityPage() {
     router.push('/');
   };
 
-  const onSubmit: SubmitHandler<AvailabilityFormValues> = (data) => {
-    const newAvailability: AvailabilitySlot = {
-      id: `avail${Date.now()}`, // Simple ID generation
-      ...data
-    };
-    setAvailabilities(prev => [...prev, newAvailability].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime() || a.startTime.localeCompare(b.startTime)));
+  const onWeeklySubmit: SubmitHandler<WeeklyScheduleFormValues> = (data) => {
+    console.log("Weekly schedule saved (simulated):", data.schedule);
+    // In a real app, save this data to backend
     toast({
-      title: "Disponibilité Ajoutée",
-      description: `Nouveau créneau de ${data.startTime} à ${data.endTime} le ${format(parseISO(data.date), "d MMM yyyy", { locale: fr })} ajouté.`,
+      title: "Horaire Hebdomadaire Enregistré",
+      description: "Votre horaire hebdomadaire récurrent a été mis à jour.",
       className: "bg-accent text-accent-foreground",
     });
-    reset();
   };
 
-  const handleDeleteAvailability = (id: string) => {
-    const slotToDelete = availabilities.find(a => a.id === id);
-    if (confirm(`Êtes-vous sûr de vouloir supprimer la disponibilité du ${slotToDelete ? format(parseISO(slotToDelete.date), "d MMM yyyy", { locale: fr }) + ' de ' + slotToDelete.startTime + ' à ' + slotToDelete.endTime : 'ce créneau'} ?`)) {
-      setAvailabilities(prev => prev.filter(a => a.id !== id));
+  const onAbsenceSubmit: SubmitHandler<AbsenceFormValues> = (data) => {
+    const newAbsence: Absence = {
+      id: `abs${Date.now()}`, 
+      ...data
+    };
+    setAbsences(prev => [...prev, newAbsence].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+    toast({
+      title: "Absence Ajoutée",
+      description: `Absence pour le ${format(parseISO(data.date), "d MMM yyyy", { locale: fr })} ajoutée.`,
+      className: "bg-accent text-accent-foreground",
+    });
+    absenceReset({ date: '', isFullDay: true, startTime: '', endTime: '', reason: '' });
+  };
+
+  const handleDeleteAbsence = (id: string) => {
+    const absenceToDelete = absences.find(a => a.id === id);
+    if (confirm(`Êtes-vous sûr de vouloir supprimer l'absence du ${absenceToDelete ? format(parseISO(absenceToDelete.date), "d MMM yyyy", { locale: fr }) : 'cette absence'} ?`)) {
+      setAbsences(prev => prev.filter(a => a.id !== id));
       toast({
-        title: "Disponibilité Supprimée",
-        description: "Le créneau de disponibilité a été supprimé.",
+        title: "Absence Supprimée",
+        description: "L'absence a été supprimée.",
         variant: "destructive",
       });
     }
@@ -86,68 +163,143 @@ export default function DoctorAvailabilityPage() {
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="mb-8">
           <h2 className="text-3xl font-headline font-bold text-primary flex items-center">
-            <CalendarPlus className="mr-3 h-8 w-8" /> Gérer mes Disponibilités
+            <CalendarPlus className="mr-3 h-8 w-8" /> Gérer mes Disponibilités et Absences
           </h2>
-          <p className="text-muted-foreground">Ajoutez ou supprimez vos créneaux de consultation.</p>
+          <p className="text-muted-foreground">Définissez votre horaire hebdomadaire et gérez vos absences.</p>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8">
-            <Card className="shadow-lg">
-            <CardHeader>
-                <CardTitle>Ajouter une nouvelle disponibilité</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                <div>
-                    <Label htmlFor="date">Date</Label>
-                    <Input id="date" type="date" {...register("date")} />
-                    {errors.date && <p className="text-sm text-destructive mt-1">{errors.date.message}</p>}
-                </div>
-                <div>
-                    <Label htmlFor="startTime">Heure de début (HH:MM)</Label>
-                    <Input id="startTime" type="time" {...register("startTime")} />
-                    {errors.startTime && <p className="text-sm text-destructive mt-1">{errors.startTime.message}</p>}
-                </div>
-                <div>
-                    <Label htmlFor="endTime">Heure de fin (HH:MM)</Label>
-                    <Input id="endTime" type="time" {...register("endTime")} />
-                    {errors.endTime && <p className="text-sm text-destructive mt-1">{errors.endTime.message}</p>}
-                </div>
-                <Button type="submit" className="w-full">
-                    <CheckCircle className="mr-2 h-5 w-5" /> Ajouter la disponibilité
-                </Button>
-                </form>
-            </CardContent>
-            </Card>
+        <Card className="shadow-lg mb-8">
+          <CardHeader>
+              <CardTitle className="flex items-center"><ListChecks className="mr-2 h-6 w-6"/>Mon Horaire Hebdomadaire Récurrent</CardTitle>
+              <CardDescription>Définissez vos jours et heures de travail habituels. Décochez un jour si vous ne travaillez pas ce jour-là.</CardDescription>
+          </CardHeader>
+          <CardContent>
+              <form onSubmit={handleWeeklySubmit(onWeeklySubmit)} className="space-y-6">
+                  {weeklyFields.map((field, index) => (
+                      <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 items-center gap-4 p-3 border rounded-md bg-muted/20">
+                          <div className="md:col-span-1 flex items-center space-x-3">
+                              <Controller
+                                  name={`schedule.${index}.isWorkingDay`}
+                                  control={weeklyControl}
+                                  render={({ field: controllerField }) => (
+                                      <Checkbox
+                                          id={`schedule.${index}.isWorkingDay`}
+                                          checked={controllerField.value}
+                                          onCheckedChange={controllerField.onChange}
+                                      />
+                                  )}
+                              />
+                              <Label htmlFor={`schedule.${index}.isWorkingDay`} className="font-semibold text-lg">{field.dayName}</Label>
+                          </div>
+                          <div className="md:col-span-1">
+                              <Label htmlFor={`schedule.${index}.startTime`}>Heure de début</Label>
+                              <Input 
+                                  id={`schedule.${index}.startTime`}
+                                  type="time" 
+                                  {...weeklyRegister(`schedule.${index}.startTime`)} 
+                                  disabled={!weeklyControl.getValues(`schedule.${index}.isWorkingDay`)}
+                                  className={weeklyErrors.schedule?.[index]?.startTime ? "border-destructive" : ""}
+                              />
+                              
+                          </div>
+                          <div className="md:col-span-1">
+                              <Label htmlFor={`schedule.${index}.endTime`}>Heure de fin</Label>
+                              <Input 
+                                  id={`schedule.${index}.endTime`}
+                                  type="time" 
+                                  {...weeklyRegister(`schedule.${index}.endTime`)} 
+                                  disabled={!weeklyControl.getValues(`schedule.${index}.isWorkingDay`)}
+                                  className={weeklyErrors.schedule?.[index]?.endTime ? "border-destructive" : ""}
+                              />
+                          </div>
+                           {weeklyErrors.schedule?.[index]?.startTime && <p className="text-sm text-destructive md:col-span-4 text-center">{weeklyErrors.schedule[index]?.startTime?.message}</p>}
+                           {weeklyErrors.schedule?.[index]?.endTime && !weeklyErrors.schedule?.[index]?.startTime && <p className="text-sm text-destructive md:col-span-4 text-center">{weeklyErrors.schedule[index]?.endTime?.message}</p>}
+                      </div>
+                  ))}
+                   <Button type="submit" className="w-full mt-6">
+                      <Save className="mr-2 h-5 w-5" /> Enregistrer l'Horaire Hebdomadaire
+                  </Button>
+              </form>
+          </CardContent>
+        </Card>
 
-            <Card className="shadow-lg">
-                <CardHeader>
-                    <CardTitle>Mes Disponibilités Actuelles</CardTitle>
-                    <CardDescription>Vos créneaux enregistrés.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {availabilities.length > 0 ? (
-                        <ul className="space-y-3 max-h-96 overflow-y-auto">
-                        {availabilities.map(avail => (
-                            <li key={avail.id} className="flex justify-between items-center p-3 bg-muted/50 rounded-md">
+        <Card className="shadow-lg">
+          <CardHeader>
+              <CardTitle className="flex items-center"><CalendarOff className="mr-2 h-6 w-6"/>Gérer mes Absences</CardTitle>
+              <CardDescription>Ajoutez ou supprimez vos jours d'absence. Ces jours annuleront votre disponibilité récurrente.</CardDescription>
+          </CardHeader>
+          <CardContent className="grid md:grid-cols-2 gap-8">
+            <div>
+                <h3 className="text-lg font-semibold mb-3">Ajouter une absence</h3>
+                <form onSubmit={handleAbsenceSubmit(onAbsenceSubmit)} className="space-y-4">
+                    <div>
+                        <Label htmlFor="absenceDate">Date de l'absence</Label>
+                        <Input id="absenceDate" type="date" {...absenceRegister("date")} />
+                        {absenceErrors.date && <p className="text-sm text-destructive mt-1">{absenceErrors.date.message}</p>}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                         <Controller
+                            name="isFullDay"
+                            control={absenceControl}
+                            render={({ field }) => (
+                                <Checkbox
+                                    id="isFullDay"
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                />
+                            )}
+                        />
+                        <Label htmlFor="isFullDay">Absence journée entière</Label>
+                    </div>
+                    {!absenceControl.getValues("isFullDay") && (
+                        <>
                             <div>
-                                <p className="font-semibold">{format(parseISO(avail.date), "eeee d MMMM yyyy", { locale: fr })}</p>
-                                <p className="text-sm text-muted-foreground flex items-center">
-                                    <Clock className="mr-1 h-4 w-4" /> {avail.startTime} - {avail.endTime}
-                                </p>
+                                <Label htmlFor="absenceStartTime">Heure de début (si partielle)</Label>
+                                <Input id="absenceStartTime" type="time" {...absenceRegister("startTime")} />
+                                {absenceErrors.startTime && <p className="text-sm text-destructive mt-1">{absenceErrors.startTime.message}</p>}
                             </div>
-                            <Button variant="destructive" size="sm" onClick={() => handleDeleteAvailability(avail.id)}>
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                            </li>
-                        ))}
-                        </ul>
-                    ) : (
-                        <p className="text-muted-foreground text-center py-4">Aucune disponibilité enregistrée.</p>
+                            <div>
+                                <Label htmlFor="absenceEndTime">Heure de fin (si partielle)</Label>
+                                <Input id="absenceEndTime" type="time" {...absenceRegister("endTime")} />
+                                {absenceErrors.endTime && !absenceErrors.startTime && <p className="text-sm text-destructive mt-1">{absenceErrors.endTime.message}</p>}
+                            </div>
+                        </>
                     )}
-                </CardContent>
-            </Card>
-        </div>
+                    <div>
+                        <Label htmlFor="absenceReason">Motif (optionnel)</Label>
+                        <Textarea id="absenceReason" {...absenceRegister("reason")} placeholder="Ex: Conférence, Congés..."/>
+                    </div>
+                    <Button type="submit" className="w-full">
+                        <CheckCircle className="mr-2 h-5 w-5" /> Ajouter l'absence
+                    </Button>
+                </form>
+            </div>
+            <div>
+                <h3 className="text-lg font-semibold mb-3">Mes Absences Enregistrées</h3>
+                {absences.length > 0 ? (
+                    <ul className="space-y-3 max-h-96 overflow-y-auto">
+                    {absences.map(abs => (
+                        <li key={abs.id} className="flex justify-between items-center p-3 bg-muted/50 rounded-md">
+                        <div>
+                            <p className="font-semibold">{format(parseISO(abs.date), "eeee d MMMM yyyy", { locale: fr })}</p>
+                            <p className="text-sm text-muted-foreground flex items-center">
+                                <Clock className="mr-1 h-4 w-4" /> 
+                                {abs.isFullDay ? "Journée entière" : `${abs.startTime} - ${abs.endTime}`}
+                            </p>
+                            {abs.reason && <p className="text-xs text-muted-foreground">Motif: {abs.reason}</p>}
+                        </div>
+                        <Button variant="destructive" size="sm" onClick={() => handleDeleteAbsence(abs.id)}>
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                        </li>
+                    ))}
+                    </ul>
+                ) : (
+                    <p className="text-muted-foreground text-center py-4">Aucune absence enregistrée.</p>
+                )}
+            </div>
+          </CardContent>
+        </Card>
         
         <CardFooter className="mt-8 border-t pt-6">
           <Button variant="outline" asChild>
@@ -163,3 +315,5 @@ export default function DoctorAvailabilityPage() {
     </div>
   );
 }
+
+    
