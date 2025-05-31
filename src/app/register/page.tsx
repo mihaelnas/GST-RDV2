@@ -1,0 +1,125 @@
+
+"use client";
+
+import Link from 'next/link';
+import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Stethoscope, UserPlus } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+
+const registerSchema = z.object({
+  fullName: z.string().min(1, { message: "Le nom complet est requis." }),
+  email: z.string().email({ message: "Adresse e-mail invalide." }),
+  password: z.string().min(6, { message: "Le mot de passe doit contenir au moins 6 caractères." }),
+  confirmPassword: z.string(),
+}).refine(data => data.password === data.confirmPassword, {
+  message: "Les mots de passe ne correspondent pas.",
+  path: ["confirmPassword"], // path of error
+});
+
+type RegisterFormValues = z.infer<typeof registerSchema>;
+
+export default function RegisterPage() {
+  const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+  });
+
+  const onSubmit = (data: RegisterFormValues) => {
+    console.log("Registration data:", data);
+    // Ici, vous intégreriez la logique d'inscription avec votre backend
+    alert("Fonctionnalité d'inscription non implémentée (pas de backend).");
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+      <div className="flex items-center justify-center gap-3 mb-8">
+        <Stethoscope className="h-10 w-10 text-primary" />
+        <h1 className="text-4xl font-headline font-bold text-primary drop-shadow-sm">
+          Clinique Rendez-Vous
+        </h1>
+      </div>
+      <Card className="w-full max-w-md shadow-xl">
+        <CardHeader className="space-y-1 text-center">
+          <CardTitle className="text-3xl font-bold flex items-center justify-center gap-2">
+            <UserPlus className="h-7 w-7" />
+            Inscription
+          </CardTitle>
+          <CardDescription>
+            Créez un compte pour accéder à nos services.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="fullName">Nom complet</Label>
+              <Input
+                id="fullName"
+                placeholder="Jean Dupont"
+                {...register("fullName")}
+                className={errors.fullName ? "border-destructive" : ""}
+              />
+              {errors.fullName && <p className="text-sm text-destructive">{errors.fullName.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="email">Adresse e-mail</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="votreadresse@exemple.com"
+                {...register("email")}
+                className={errors.email ? "border-destructive" : ""}
+              />
+              {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Mot de passe</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="********"
+                {...register("password")}
+                className={errors.password ? "border-destructive" : ""}
+              />
+              {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                placeholder="********"
+                {...register("confirmPassword")}
+                className={errors.confirmPassword ? "border-destructive" : ""}
+              />
+              {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>}
+            </div>
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+              S&apos;inscrire
+            </Button>
+          </form>
+        </CardContent>
+        <CardFooter className="flex flex-col items-center space-y-2 pt-6">
+          <p className="text-sm text-muted-foreground">
+            Vous avez déjà un compte ?{' '}
+            <Link href="/login" className="font-semibold text-primary hover:underline">
+              Connectez-vous
+            </Link>
+          </p>
+        </CardFooter>
+      </Card>
+      <footer className="py-8 text-center text-muted-foreground mt-8">
+        <p>&copy; {new Date().getFullYear()} Clinique Rendez-Vous. Tous droits réservés.</p>
+      </footer>
+    </div>
+  );
+}
