@@ -17,7 +17,7 @@ import { Stethoscope, LogIn } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useRouter } from 'next/navigation'; // Importer useRouter
+import { useRouter } from 'next/navigation';
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Adresse e-mail invalide." }),
@@ -27,7 +27,7 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
-  const router = useRouter(); // Initialiser useRouter
+  const router = useRouter();
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
   });
@@ -36,7 +36,7 @@ export default function LoginPage() {
     console.log("Login data:", data);
     // Simulation de connexion réussie
     alert("Connexion simulée réussie ! Vous allez être redirigé.");
-    router.push('/?loggedIn=true'); // Rediriger vers la page d'accueil avec le flag
+    router.push('/?loggedIn=true');
   };
 
   return (
@@ -54,7 +54,7 @@ export default function LoginPage() {
             Connexion
           </CardTitle>
           <CardDescription>
-            Connectez-vous à votre compte pour gérer vos rendez-vous.
+            Connectez-vous en tant que patient, médecin ou personnel de la clinique.
           </CardDescription>
         </CardHeader>
         <CardContent>

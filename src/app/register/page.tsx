@@ -13,17 +13,27 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Stethoscope, UserPlus } from 'lucide-react';
-import { useForm } from 'react-hook-form';
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useRouter } from 'next/navigation'; // Importer useRouter
+import { useRouter } from 'next/navigation';
 
 const registerSchema = z.object({
   fullName: z.string().min(1, { message: "Le nom complet est requis." }),
   email: z.string().email({ message: "Adresse e-mail invalide." }),
   password: z.string().min(6, { message: "Le mot de passe doit contenir au moins 6 caractères." }),
   confirmPassword: z.string(),
+  role: z.enum(["patient", "medecin", "personnel_clinique"], {
+    required_error: "Veuillez sélectionner un rôle.",
+  }),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Les mots de passe ne correspondent pas.",
   path: ["confirmPassword"],
@@ -32,16 +42,15 @@ const registerSchema = z.object({
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
-  const router = useRouter(); // Initialiser useRouter
-  const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormValues>({
+  const router = useRouter();
+  const { register, handleSubmit, control, formState: { errors } } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
   });
 
   const onSubmit = (data: RegisterFormValues) => {
     console.log("Registration data:", data);
-    // Simulation d'inscription réussie
     alert("Inscription simulée réussie ! Vous allez être redirigé et 'connecté'.");
-    router.push('/?loggedIn=true'); // Rediriger vers la page d'accueil avec le flag
+    router.push('/?loggedIn=true');
   };
 
   return (
@@ -84,6 +93,26 @@ export default function RegisterPage() {
                 className={errors.email ? "border-destructive" : ""}
               />
               {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="role">Je suis un(e)</Label>
+              <Controller
+                name="role"
+                control={control}
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <SelectTrigger className={errors.role ? "border-destructive" : ""}>
+                      <SelectValue placeholder="Sélectionnez votre rôle" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="patient">Patient / Patiente</SelectItem>
+                      <SelectItem value="medecin">Médecin</SelectItem>
+                      <SelectItem value="personnel_clinique">Personnel de la clinique</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+              {errors.role && <p className="text-sm text-destructive">{errors.role.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Mot de passe</Label>
