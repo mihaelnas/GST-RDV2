@@ -13,15 +13,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Stethoscope, UserPlus } from 'lucide-react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
@@ -31,9 +24,7 @@ const registerSchema = z.object({
   email: z.string().email({ message: "Adresse e-mail invalide." }),
   password: z.string().min(6, { message: "Le mot de passe doit contenir au moins 6 caractères." }),
   confirmPassword: z.string(),
-  role: z.enum(["patient", "medecin", "personnel_clinique"], {
-    required_error: "Veuillez sélectionner un rôle.",
-  }),
+  // Le rôle est implicitement "patient" pour l'auto-inscription
 }).refine(data => data.password === data.confirmPassword, {
   message: "Les mots de passe ne correspondent pas.",
   path: ["confirmPassword"],
@@ -43,25 +34,14 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register, handleSubmit, control, formState: { errors, dirtyFields }, watch } = useForm<RegisterFormValues>({
+  const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
   });
 
-  const selectedRole = watch("role");
-
   const onSubmit = (data: RegisterFormValues) => {
-    console.log("Registration data:", data);
-
-    if (data.role === "patient") {
-      alert("Inscription réussie ! Vous allez être redirigé et connecté en tant que patient.");
-      router.push('/?loggedIn=true');
-    } else if (data.role === "medecin") {
-      alert(`Demande d'inscription en tant que Médecin reçue. Votre compte nécessitera une validation par la clinique. Vous serez redirigé vers votre tableau de bord.`);
-      router.push('/doctor/dashboard');
-    } else if (data.role === "personnel_clinique") {
-      alert(`Demande d'inscription en tant que Personnel de la clinique reçue. Votre compte nécessitera une validation. Vous serez redirigé vers votre tableau de bord.`);
-      router.push('/clinic-staff/dashboard');
-    }
+    console.log("Registration data (Patient):", data);
+    alert("Inscription réussie en tant que Patient ! Vous allez être redirigé et connecté.");
+    router.push('/?loggedIn=true');
   };
 
   return (
@@ -76,10 +56,10 @@ export default function RegisterPage() {
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-3xl font-bold flex items-center justify-center gap-2">
             <UserPlus className="h-7 w-7" />
-            Inscription
+            Inscription Patient
           </CardTitle>
           <CardDescription>
-            Créez un compte pour accéder à nos services.
+            Créez votre compte patient pour accéder à nos services.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -104,31 +84,6 @@ export default function RegisterPage() {
                 className={errors.email ? "border-destructive" : ""}
               />
               {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role">Je suis un(e)</Label>
-              <Controller
-                name="role"
-                control={control}
-                render={({ field }) => (
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <SelectTrigger className={errors.role ? "border-destructive" : ""}>
-                      <SelectValue placeholder="Sélectionnez votre rôle" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="patient">Patient / Patiente</SelectItem>
-                      <SelectItem value="medecin">Médecin</SelectItem>
-                      <SelectItem value="personnel_clinique">Personnel de la clinique</SelectItem>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-              {errors.role && <p className="text-sm text-destructive">{errors.role.message}</p>}
-              { (dirtyFields.role && (selectedRole === "medecin" || selectedRole === "personnel_clinique")) && (
-                <p className="text-xs text-muted-foreground pt-1 px-1">
-                  Note : Les comptes pour les rôles Médecin et Personnel de la clinique nécessitent une validation par l'administration avant d'être pleinement activés.
-                </p>
-              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Mot de passe</Label>
@@ -163,6 +118,9 @@ export default function RegisterPage() {
             <Link href="/login" className="font-semibold text-primary hover:underline">
               Connectez-vous
             </Link>
+          </p>
+           <p className="text-xs text-muted-foreground mt-4 text-center">
+            Les comptes pour les Médecins et le Personnel sont créés par l&apos;administration de la clinique.
           </p>
         </CardFooter>
       </Card>

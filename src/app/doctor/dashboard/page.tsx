@@ -6,17 +6,24 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react'; // Removed useEffect as it wasn't strictly necessary for this simulation
-import { BarChart, CalendarDays, FileText, Settings, Users } from 'lucide-react';
+import { useState } from 'react';
+import { BarChart, CalendarDays, FileText, Settings, Users, CalendarPlus, CalendarX } from 'lucide-react';
 
 export default function DoctorDashboardPage() {
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); // Dashboards are for logged-in users
+  const [isLoggedIn, setIsLoggedIn] = useState(true); 
 
   const handleLogout = () => {
     setIsLoggedIn(false); 
-    // In a real app, clear session/token here
     router.push('/'); 
+  };
+
+  const handleAddAvailability = () => {
+    alert("Fonctionnalité 'Ajouter une disponibilité' non implémentée.");
+  };
+
+  const handleDeleteAvailability = () => {
+    alert("Fonctionnalité 'Supprimer une disponibilité' non implémentée.");
   };
 
   return (
@@ -35,8 +42,23 @@ export default function DoctorDashboardPage() {
               <CalendarDays className="h-6 w-6 text-primary" />
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">Consultez et gérez votre planning de consultations.</p>
-              <Button className="w-full">Voir mes rendez-vous</Button>
+              <p className="text-sm text-muted-foreground mb-4">Consultez votre planning de consultations.</p>
+              <Button className="w-full" onClick={() => alert("Redirection vers la page de gestion des rendez-vous du médecin (non implémentée).")}>Voir mes rendez-vous</Button>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg hover:shadow-xl transition-shadow">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-lg font-medium">Gérer mes Disponibilités</CardTitle>
+              <CalendarPlus className="h-6 w-6 text-primary" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <p className="text-sm text-muted-foreground mb-2">Ajoutez ou supprimez vos créneaux de consultation.</p>
+              <Button className="w-full" onClick={handleAddAvailability}>Ajouter une disponibilité</Button>
+              <Button className="w-full" variant="outline" onClick={handleDeleteAvailability}>
+                <CalendarX className="mr-2 h-4 w-4"/>
+                Supprimer une disponibilité
+              </Button>
             </CardContent>
           </Card>
 
@@ -47,7 +69,7 @@ export default function DoctorDashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">Accédez aux dossiers médicaux de vos patients.</p>
-              <Button className="w-full">Consulter les dossiers</Button>
+              <Button className="w-full" onClick={() => alert("Redirection vers la gestion des dossiers patients (non implémentée).")}>Consulter les dossiers</Button>
             </CardContent>
           </Card>
 
@@ -58,18 +80,18 @@ export default function DoctorDashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">Générez et consultez les prescriptions.</p>
-              <Button className="w-full">Gérer les prescriptions</Button>
+              <Button className="w-full" onClick={() => alert("Redirection vers la gestion des prescriptions (non implémentée).")}>Gérer les prescriptions</Button>
             </CardContent>
           </Card>
-
-          <Card className="shadow-lg hover:shadow-xl transition-shadow md:col-span-2 lg:col-span-1">
+          
+          <Card className="shadow-lg hover:shadow-xl transition-shadow">
              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-medium">Statistiques</CardTitle>
               <BarChart className="h-6 w-6 text-primary" />
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">Visualisez vos statistiques d'activité.</p>
-              <Button className="w-full" variant="outline">Voir les statistiques</Button>
+              <Button className="w-full" variant="outline" onClick={() => alert("Affichage des statistiques (non implémenté).")}>Voir les statistiques</Button>
             </CardContent>
           </Card>
           
@@ -80,7 +102,7 @@ export default function DoctorDashboardPage() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">Mettez à jour vos informations personnelles.</p>
-              <Button className="w-full" variant="outline">Modifier mon profil</Button>
+              <Button className="w-full" variant="outline" onClick={() => alert("Redirection vers la page de profil (non implémentée).")}>Modifier mon profil</Button>
             </CardContent>
           </Card>
         </div>
