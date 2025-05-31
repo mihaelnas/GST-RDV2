@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
@@ -13,11 +14,13 @@ import {
   AlertDialogHeader, 
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
-import { Clock, CalendarDays, CheckCircle2, Info, CalendarCheck, CalendarX } from 'lucide-react';
-import { format } from 'date-fns';
+import { Calendar as CalendarIcon, Clock, CalendarDays, CheckCircle2, Info, CalendarCheck, CalendarX } from 'lucide-react';
+import { format, isPast, startOfDay, isEqual, set } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 
 interface Appointment {
   id: string;
@@ -26,33 +29,47 @@ interface Appointment {
   isBooked: boolean;
 }
 
-const generateInitialAppointments = (): Appointment[] => {
+const generateAppointmentsForDate = (date: Date, globalBookings: Appointment[]): Appointment[] => {
   const appointments: Appointment[] = [];
-  const today = new Date();
-  
-  const startTime = 9; 
-  const endTime = 17; 
+  const targetDate = startOfDay(date); 
+
+  const startTime = 9;
+  const endTime = 17;
   const interval = 30;
+
+  // For today, allow slots. For past dates, return empty.
+  if (isPast(targetDate) && !isEqual(targetDate, startOfDay(new Date()))) {
+      return [];
+  }
 
   for (let hour = startTime; hour < endTime; hour++) {
     for (let minute = 0; minute < 60; minute += interval) {
-      const slotTime = new Date(today);
-      slotTime.setHours(hour, minute, 0, 0);
-      if (slotTime.getTime() > new Date().getTime()) {
-        appointments.push({
-          id: `${hour.toString().padStart(2, '0')}${minute.toString().padStart(2, '0')}`,
-          dateTime: slotTime,
-          durationMinutes: interval,
-          isBooked: false,
-        });
+      const slotDateTime = set(targetDate, { hours: hour, minutes: minute, seconds: 0, milliseconds: 0 });
+
+      if (isEqual(targetDate, startOfDay(new Date())) && slotDateTime.getTime() <= new Date().getTime()) {
+        continue; 
       }
+
+      const isAlreadyBooked = globalBookings.some(bookedApp => 
+        isEqual(bookedApp.dateTime, slotDateTime)
+      );
+
+      appointments.push({
+        id: format(slotDateTime, 'yyyyMMddHHmm'), 
+        dateTime: slotDateTime,
+        durationMinutes: interval,
+        isBooked: isAlreadyBooked,
+      });
     }
   }
-  return appointments;
+  return appointments.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 };
 
 export default function AppointmentScheduler() {
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [allBookedAppointments, setAllBookedAppointments] = useState<Appointment[]>([]);
+  
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [dialogAction, setDialogAction] = useState<'book' | 'cancel' | null>(null);
   const [showDialog, setShowDialog] = useState(false);
@@ -60,19 +77,21 @@ export default function AppointmentScheduler() {
 
   const [animateId, setAnimateId] = useState<string | null>(null);
   const [animationType, setAnimationType] = useState<'booked' | 'cancelled' | null>(null);
+  const [popoverOpen, setPopoverOpen] = useState(false);
 
 
   useEffect(() => {
-    setAppointments(generateInitialAppointments());
-  }, []);
+    setAppointments(generateAppointmentsForDate(selectedDate, allBookedAppointments));
+  }, [selectedDate, allBookedAppointments]);
 
   const availableSlots = useMemo(() => 
-    appointments.filter(app => !app.isBooked).sort((a,b) => a.dateTime.getTime() - b.dateTime.getTime()), 
+    appointments.filter(app => !app.isBooked), 
     [appointments]
   );
+
   const bookedSlots = useMemo(() => 
-    appointments.filter(app => app.isBooked).sort((a,b) => a.dateTime.getTime() - b.dateTime.getTime()), 
-    [appointments]
+    allBookedAppointments.sort((a,b) => a.dateTime.getTime() - b.dateTime.getTime()), 
+    [allBookedAppointments]
   );
 
   const handleOpenDialog = (appointment: Appointment, action: 'book' | 'cancel') => {
@@ -87,19 +106,19 @@ export default function AppointmentScheduler() {
     setAnimateId(selectedAppointment.id);
 
     if (dialogAction === 'book') {
-      setAppointments(prev => prev.map(app => app.id === selectedAppointment.id ? { ...app, isBooked: true } : app));
+      setAllBookedAppointments(prev => [...prev, { ...selectedAppointment, isBooked: true }]);
       setAnimationType('booked');
       toast({
         title: "Rendez-vous Confirmé!",
-        description: `Votre rendez-vous pour ${format(selectedAppointment.dateTime, 'HH:mm', { locale: fr })} est confirmé.`,
+        description: `Votre rendez-vous pour le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} est confirmé.`,
         className: "bg-accent text-accent-foreground"
       });
     } else if (dialogAction === 'cancel') {
-      setAppointments(prev => prev.map(app => app.id === selectedAppointment.id ? { ...app, isBooked: false } : app));
+      setAllBookedAppointments(prev => prev.filter(app => app.id !== selectedAppointment.id));
       setAnimationType('cancelled');
       toast({
         title: "Rendez-vous Annulé",
-        description: `Votre rendez-vous pour ${format(selectedAppointment.dateTime, 'HH:mm', { locale: fr })} a été annulé.`,
+        description: `Votre rendez-vous pour le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} a été annulé.`,
         variant: "destructive"
       });
     }
@@ -126,10 +145,55 @@ export default function AppointmentScheduler() {
 
   return (
     <div className="space-y-12">
+      <div className="mb-8 p-6 bg-card rounded-lg shadow-md">
+        <h3 className="text-xl font-semibold mb-4 text-primary">Choisir une date pour votre rendez-vous :</h3>
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant={"outline"}
+              className={cn(
+                "w-full sm:w-[320px] justify-start text-left font-normal text-base py-6",
+                !selectedDate && "text-muted-foreground"
+              )}
+            >
+              <CalendarIcon className="mr-3 h-5 w-5" />
+              {selectedDate ? format(selectedDate, "PPPP", { locale: fr }) : <span>Choisissez une date</span>}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={selectedDate}
+              onSelect={(date) => {
+                if (date) {
+                  const today = startOfDay(new Date());
+                  const newSelectedDay = startOfDay(date);
+                  if (newSelectedDay >= today) {
+                    setSelectedDate(date);
+                    setPopoverOpen(false); 
+                  } else {
+                    toast({
+                      title: "Date non valide",
+                      description: "Veuillez sélectionner une date future ou aujourd'hui.",
+                      variant: "destructive"
+                    });
+                  }
+                }
+              }}
+              disabled={(date) => isPast(date) && !isEqual(startOfDay(date), startOfDay(new Date()))}
+              initialFocus
+              locale={fr}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+
       <section>
         <div className="flex items-center gap-2 mb-6">
           <CalendarDays className="h-8 w-8 text-primary" />
-          <h2 className="text-3xl font-headline font-semibold">Horaires disponibles</h2>
+          <h2 className="text-3xl font-headline font-semibold">
+            Horaires disponibles pour le {format(selectedDate, "eeee d MMMM yyyy", { locale: fr })}
+          </h2>
         </div>
         {availableSlots.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -137,18 +201,18 @@ export default function AppointmentScheduler() {
               <Card 
                 key={app.id} 
                 className={cn(
-                  "shadow-lg hover:shadow-xl transition-shadow duration-300",
+                  "shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col",
                   animateId === app.id && animationType === 'booked' ? "animate-out fade-out-50 duration-500" : "animate-in fade-in-0 duration-500"
                 )}
               >
-                <CardHeader>
+                <CardHeader className="flex-grow">
                   <CardTitle className="flex items-center text-xl">
                     <Clock className="mr-2 h-5 w-5 text-muted-foreground" />
                     {format(app.dateTime, 'HH:mm', { locale: fr })} - {format(getSlotEndTime(app.dateTime, app.durationMinutes), 'HH:mm', { locale: fr })}
                   </CardTitle>
                   <CardDescription>{format(app.dateTime, 'eeee d MMMM yyyy', { locale: fr })}</CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="flex-grow">
                   <p className="text-sm text-muted-foreground">Statut: <span className="font-semibold text-accent">Disponible</span></p>
                 </CardContent>
                 <CardFooter>
@@ -165,36 +229,37 @@ export default function AppointmentScheduler() {
             ))}
           </div>
         ) : (
-          <Card className="p-6 text-center">
+          <Card className="p-6 text-center col-span-full">
             <Info className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">Aucun créneau disponible pour le moment.</p>
+            <p className="text-lg text-muted-foreground">Aucun créneau disponible pour le {format(selectedDate, "eeee d MMMM yyyy", { locale: fr })}.</p>
+            <p className="text-sm text-muted-foreground mt-2">Veuillez essayer une autre date.</p>
           </Card>
         )}
       </section>
 
-      <section>
-        <div className="flex items-center gap-2 mb-6">
-          <CheckCircle2 className="h-8 w-8 text-primary" />
-          <h2 className="text-3xl font-headline font-semibold">Mes rendez-vous</h2>
-        </div>
-        {bookedSlots.length > 0 ? (
+      {bookedSlots.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-6">
+            <CheckCircle2 className="h-8 w-8 text-primary" />
+            <h2 className="text-3xl font-headline font-semibold">Mes rendez-vous</h2>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {bookedSlots.map(app => (
               <Card 
                 key={app.id} 
                 className={cn(
-                  "shadow-lg border-primary",
+                  "shadow-lg border-primary flex flex-col",
                   animateId === app.id && animationType === 'cancelled' ? "animate-out fade-out-50 duration-500" : "animate-in fade-in-0 duration-500"
                 )}
               >
-                <CardHeader>
+                <CardHeader className="flex-grow">
                   <CardTitle className="flex items-center text-xl">
                     <Clock className="mr-2 h-5 w-5 text-muted-foreground" />
                     {format(app.dateTime, 'HH:mm', { locale: fr })} - {format(getSlotEndTime(app.dateTime, app.durationMinutes), 'HH:mm', { locale: fr })}
                   </CardTitle>
                   <CardDescription>{format(app.dateTime, 'PPPP', { locale: fr })}</CardDescription>
                 </CardHeader>
-                <CardContent className="flex items-center">
+                <CardContent className="flex items-center flex-grow">
                   <CheckCircle2 className="mr-2 h-5 w-5 text-accent" />
                   <p className="text-sm font-semibold text-accent">Confirmé</p>
                 </CardContent>
@@ -211,13 +276,16 @@ export default function AppointmentScheduler() {
               </Card>
             ))}
           </div>
-        ) : (
-           <Card className="p-6 text-center">
+        </section>
+      )}
+      
+      {bookedSlots.length === 0 && (
+         <Card className="p-6 text-center mt-10">
             <Info className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-            <p className="text-muted-foreground">Vous n'avez aucun rendez-vous programmé.</p>
+            <p className="text-lg text-muted-foreground">Vous n'avez aucun rendez-vous programmé.</p>
           </Card>
-        )}
-      </section>
+      )}
+
 
       {selectedAppointment && (
         <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
@@ -228,7 +296,7 @@ export default function AppointmentScheduler() {
               </AlertDialogTitle>
               <AlertDialogDescription>
                 Voulez-vous vraiment {dialogAction === 'book' ? 'réserver' : 'annuler'} ce créneau pour le <br />
-                <span className="font-semibold">{format(selectedAppointment.dateTime, 'eeee d MMMM yyyy', { locale: fr })}</span> à <span className="font-semibold">{format(selectedAppointment.dateTime, 'HH:mm', { locale: fr })}</span>?
+                <span className="font-semibold">{format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })}</span>?
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -249,3 +317,4 @@ export default function AppointmentScheduler() {
     </div>
   );
 }
+
