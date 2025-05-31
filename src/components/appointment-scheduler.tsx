@@ -10,7 +10,8 @@ import {
   AlertDialogContent, 
   AlertDialogDescription, 
   AlertDialogHeader, 
-  AlertDialogTitle 
+  AlertDialogTitle,
+  AlertDialogFooter
 } from '@/components/ui/alert-dialog';
 import { Clock, CalendarDays, CheckCircle2, Info, CalendarCheck, CalendarX } from 'lucide-react';
 import { format } from 'date-fns';
