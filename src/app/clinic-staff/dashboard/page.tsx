@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Users, CalendarPlus, ClipboardList, Settings, BarChart2, UserPlus, UserX, Hospital, ShieldCheck } from 'lucide-react';
+import { Users, CalendarPlus, ClipboardList, Settings, BarChart2, UserPlus, Hospital, List, Eye, BriefcaseMedical } from 'lucide-react';
 
 export default function ClinicStaffDashboardPage() {
   const router = useRouter();
@@ -17,11 +17,6 @@ export default function ClinicStaffDashboardPage() {
     setIsLoggedIn(false);
     router.push('/');
   };
-
-  const handleAddDoctor = () => alert("Fonctionnalité 'Ajouter un Médecin' non implémentée. Le personnel peut créer un compte médecin ici.");
-  const handleDeleteDoctor = () => alert("Fonctionnalité 'Supprimer un Médecin' non implémentée.");
-  const handleAddPatient = () => alert("Fonctionnalité 'Ajouter un Patient' non implémentée. Le personnel peut créer un compte patient ici.");
-  const handleDeletePatient = () => alert("Fonctionnalité 'Supprimer un Patient' non implémentée.");
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -36,20 +31,20 @@ export default function ClinicStaffDashboardPage() {
           <Card className="shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-medium">Gestion des Médecins</CardTitle>
-              <Hospital className="h-6 w-6 text-primary" />
+              <BriefcaseMedical className="h-6 w-6 text-primary" />
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground mb-2">Ajoutez ou supprimez des profils médecins.</p>
-              <Button className="w-full" onClick={handleAddDoctor}>
-                <UserPlus className="mr-2 h-4 w-4" /> Ajouter un Médecin
+              <p className="text-sm text-muted-foreground mb-2">Ajoutez, visualisez ou modifiez les profils médecins.</p>
+              <Button className="w-full" asChild>
+                <Link href="/clinic-staff/doctors/add">
+                  <UserPlus className="mr-2 h-4 w-4" /> Ajouter un Médecin
+                </Link>
               </Button>
-              <Button className="w-full" variant="outline" onClick={handleDeleteDoctor}>
-                 <UserX className="mr-2 h-4 w-4" /> Supprimer un Médecin
+              <Button className="w-full" variant="outline" asChild>
+                 <Link href="/clinic-staff/doctors">
+                    <List className="mr-2 h-4 w-4" /> Voir/Modifier les Médecins
+                 </Link>
               </Button>
-              {/* Placeholder pour la liste des médecins */}
-              <div className="mt-3 pt-3 border-t border-border">
-                <p className="text-xs text-muted-foreground">Liste des médecins (simulée)...</p>
-              </div>
             </CardContent>
           </Card>
 
@@ -59,20 +54,17 @@ export default function ClinicStaffDashboardPage() {
               <Users className="h-6 w-6 text-primary" />
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground mb-2">Créez ou gérez les dossiers patients.</p>
-               <Button className="w-full" onClick={handleAddPatient}>
-                <UserPlus className="mr-2 h-4 w-4" /> Ajouter un Patient
+              <p className="text-sm text-muted-foreground mb-2">Créez, visualisez ou gérez les dossiers patients.</p>
+               <Button className="w-full" asChild>
+                <Link href="/clinic-staff/patients/add">
+                    <UserPlus className="mr-2 h-4 w-4" /> Ajouter un Patient
+                </Link>
               </Button>
-              <Button className="w-full" variant="outline" onClick={handleDeletePatient}>
-                 <UserX className="mr-2 h-4 w-4" /> Supprimer un Patient
+              <Button className="w-full" variant="outline" asChild>
+                <Link href="/clinic-staff/patients">
+                    <List className="mr-2 h-4 w-4" /> Voir/Modifier les Patients
+                </Link>
               </Button>
-              <Button className="w-full mt-2" variant="secondary" onClick={() => alert("Accès aux détails et modification des patients (non implémenté).")}>
-                Voir/Modifier les Patients
-              </Button>
-              {/* Placeholder pour la liste des patients */}
-              <div className="mt-3 pt-3 border-t border-border">
-                <p className="text-xs text-muted-foreground">Liste des patients (simulée)...</p>
-              </div>
             </CardContent>
           </Card>
           
@@ -82,8 +74,12 @@ export default function ClinicStaffDashboardPage() {
               <CalendarPlus className="h-6 w-6 text-primary" />
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground mb-4">Visualisez, organisez et confirmez tous les rendez-vous.</p>
-              <Button className="w-full" onClick={() => alert("Accès au planning général des rendez-vous (non implémenté).")}>Voir tous les rendez-vous</Button>
+              <p className="text-sm text-muted-foreground mb-4">Visualisez et organisez tous les rendez-vous.</p>
+              <Button className="w-full" asChild>
+                <Link href="/clinic-staff/appointments">
+                    <Eye className="mr-2 h-4 w-4" /> Voir tous les rendez-vous
+                </Link>
+              </Button>
             </CardContent>
           </Card>
 
