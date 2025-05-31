@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Users, CalendarPlus, ClipboardList, Settings, BarChart2, UserPlus, Hospital, List, Eye, BriefcaseMedical } from 'lucide-react';
+import { Users, CalendarPlus, ClipboardList, Settings, BarChart2, UserPlus, Hospital, List, Eye, BriefcaseMedical, CreditCard } from 'lucide-react';
 
 export default function ClinicStaffDashboardPage() {
   const router = useRouter();
@@ -86,11 +86,15 @@ export default function ClinicStaffDashboardPage() {
           <Card className="shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-medium">Facturation et Paiements</CardTitle>
-              <ClipboardList className="h-6 w-6 text-primary" />
+              <CreditCard className="h-6 w-6 text-primary" />
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">Suivez les factures et les paiements.</p>
-              <Button className="w-full" onClick={() => alert("Accès au module de facturation (non implémenté).")}>Accéder à la facturation</Button>
+              <Button className="w-full" asChild>
+                <Link href="/clinic-staff/billing">
+                    <ClipboardList className="mr-2 h-4 w-4" /> Accéder à la facturation
+                </Link>
+              </Button>
             </CardContent>
           </Card>
           
