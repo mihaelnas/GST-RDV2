@@ -22,16 +22,16 @@ import { Textarea } from '@/components/ui/textarea';
 const dayOfWeekSchema = z.object({
   dayName: z.string(),
   isWorkingDay: z.boolean(),
-  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "HH:MM" }).optional().or(z.literal('')),
-  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "HH:MM" }).optional().or(z.literal('')),
+  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Format HH:MM requis." }).optional().or(z.literal('')),
+  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Format HH:MM requis." }).optional().or(z.literal('')),
 }).refine(data => {
   if (data.isWorkingDay) {
     return data.startTime && data.endTime && data.startTime < data.endTime;
   }
   return true;
 }, {
-  message: "L'heure de début doit être avant l'heure de fin.",
-  path: ["startTime"], // Or apply to endTime or a general form error
+  message: "Si le jour est travaillé, l'heure de début et de fin sont requises, et le début doit précéder la fin.",
+  path: ["startTime"], 
 });
 
 const weeklyScheduleSchema = z.object({
@@ -52,7 +52,7 @@ const absenceSchema = z.object({
   }
   return true;
 }, {
-  message: "Pour une absence partielle, l'heure de début doit être avant l'heure de fin.",
+  message: "Pour une absence partielle, l'heure de début doit être avant l'heure de fin et les deux sont requis.",
   path: ["startTime"],
 });
 
@@ -72,26 +72,13 @@ const daysOfWeek = [
   { name: "Dimanche", index: 0 },
 ];
 
-const initialWeeklySchedule: WeeklyScheduleFormValues = {
+const defaultDoctorWeeklySchedule: WeeklyScheduleFormValues = {
   schedule: daysOfWeek.map(day => ({
     dayName: day.name,
-    isWorkingDay: true, // Par défaut disponible tous les jours
-    startTime: "", // Le médecin doit les remplir
+    isWorkingDay: true, // Par défaut, tous les jours sont cochés comme travaillés
+    startTime: "", // Mais les heures doivent être spécifiées
     endTime: "",
   })),
-};
-
-// Exemple: Dr. Exemple est disponible L-V 09:00-12:00 et 14:00-17:00
-const exampleWeeklySchedule: WeeklyScheduleFormValues = {
-  schedule: daysOfWeek.map(day => {
-    const isWeekend = day.name === "Samedi" || day.name === "Dimanche";
-    return {
-      dayName: day.name,
-      isWorkingDay: !isWeekend,
-      startTime: !isWeekend ? "09:00" : "",
-      endTime: !isWeekend ? "17:00" : "",
-    };
-  }),
 };
 
 
@@ -102,19 +89,21 @@ export default function DoctorAvailabilityPage() {
   
   const [absences, setAbsences] = useState<Absence[]>([]);
 
-  const { control: weeklyControl, register: weeklyRegister, handleSubmit: handleWeeklySubmit, formState: { errors: weeklyErrors }, reset: weeklyReset } = useForm<WeeklyScheduleFormValues>({
+  const { control: weeklyControl, register: weeklyRegister, handleSubmit: handleWeeklySubmit, formState: { errors: weeklyErrors }, reset: weeklyReset, watch: watchWeeklySchedule } = useForm<WeeklyScheduleFormValues>({
     resolver: zodResolver(weeklyScheduleSchema),
-    defaultValues: exampleWeeklySchedule, // Using example for a more filled-out default
+    defaultValues: defaultDoctorWeeklySchedule, 
   });
   const { fields: weeklyFields } = useFieldArray({
     control: weeklyControl,
     name: "schedule",
   });
 
-  const { control: absenceControl, register: absenceRegister, handleSubmit: handleAbsenceSubmit, formState: { errors: absenceErrors }, reset: absenceReset } = useForm<AbsenceFormValues>({
+  const { control: absenceControl, register: absenceRegister, handleSubmit: handleAbsenceSubmit, formState: { errors: absenceErrors }, reset: absenceReset, watch: watchAbsenceForm } = useForm<AbsenceFormValues>({
     resolver: zodResolver(absenceSchema),
-    defaultValues: { isFullDay: true },
+    defaultValues: { isFullDay: true, date: '', startTime: '', endTime: '', reason: '' },
   });
+  
+  const absenceIsFullDay = watchAbsenceForm("isFullDay");
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -171,51 +160,60 @@ export default function DoctorAvailabilityPage() {
         <Card className="shadow-lg mb-8">
           <CardHeader>
               <CardTitle className="flex items-center"><ListChecks className="mr-2 h-6 w-6"/>Mon Horaire Hebdomadaire Récurrent</CardTitle>
-              <CardDescription>Définissez vos jours et heures de travail habituels. Décochez un jour si vous ne travaillez pas ce jour-là.</CardDescription>
+              <CardDescription>
+                Par défaut, tous les jours sont considérés comme potentiellement travaillés. 
+                Veuillez décocher les jours non travaillés ou spécifier vos heures (début et fin) pour chaque jour de travail.
+              </CardDescription>
           </CardHeader>
           <CardContent>
               <form onSubmit={handleWeeklySubmit(onWeeklySubmit)} className="space-y-6">
-                  {weeklyFields.map((field, index) => (
-                      <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 items-center gap-4 p-3 border rounded-md bg-muted/20">
-                          <div className="md:col-span-1 flex items-center space-x-3">
-                              <Controller
-                                  name={`schedule.${index}.isWorkingDay`}
-                                  control={weeklyControl}
-                                  render={({ field: controllerField }) => (
-                                      <Checkbox
-                                          id={`schedule.${index}.isWorkingDay`}
-                                          checked={controllerField.value}
-                                          onCheckedChange={controllerField.onChange}
-                                      />
-                                  )}
-                              />
-                              <Label htmlFor={`schedule.${index}.isWorkingDay`} className="font-semibold text-lg">{field.dayName}</Label>
-                          </div>
-                          <div className="md:col-span-1">
-                              <Label htmlFor={`schedule.${index}.startTime`}>Heure de début</Label>
-                              <Input 
-                                  id={`schedule.${index}.startTime`}
-                                  type="time" 
-                                  {...weeklyRegister(`schedule.${index}.startTime`)} 
-                                  disabled={!weeklyControl.getValues(`schedule.${index}.isWorkingDay`)}
-                                  className={weeklyErrors.schedule?.[index]?.startTime ? "border-destructive" : ""}
-                              />
-                              
-                          </div>
-                          <div className="md:col-span-1">
-                              <Label htmlFor={`schedule.${index}.endTime`}>Heure de fin</Label>
-                              <Input 
-                                  id={`schedule.${index}.endTime`}
-                                  type="time" 
-                                  {...weeklyRegister(`schedule.${index}.endTime`)} 
-                                  disabled={!weeklyControl.getValues(`schedule.${index}.isWorkingDay`)}
-                                  className={weeklyErrors.schedule?.[index]?.endTime ? "border-destructive" : ""}
-                              />
-                          </div>
-                           {weeklyErrors.schedule?.[index]?.startTime && <p className="text-sm text-destructive md:col-span-4 text-center">{weeklyErrors.schedule[index]?.startTime?.message}</p>}
-                           {weeklyErrors.schedule?.[index]?.endTime && !weeklyErrors.schedule?.[index]?.startTime && <p className="text-sm text-destructive md:col-span-4 text-center">{weeklyErrors.schedule[index]?.endTime?.message}</p>}
-                      </div>
-                  ))}
+                  {weeklyFields.map((field, index) => {
+                      const currentDayValues = watchWeeklySchedule(`schedule.${index}`);
+                      return (
+                        <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 items-center gap-4 p-3 border rounded-md bg-muted/20">
+                            <div className="md:col-span-1 flex items-center space-x-3">
+                                <Controller
+                                    name={`schedule.${index}.isWorkingDay`}
+                                    control={weeklyControl}
+                                    render={({ field: controllerField }) => (
+                                        <Checkbox
+                                            id={`schedule.${index}.isWorkingDay`}
+                                            checked={controllerField.value}
+                                            onCheckedChange={controllerField.onChange}
+                                        />
+                                    )}
+                                />
+                                <Label htmlFor={`schedule.${index}.isWorkingDay`} className="font-semibold text-lg">{field.dayName}</Label>
+                            </div>
+                            <div className="md:col-span-1">
+                                <Label htmlFor={`schedule.${index}.startTime`}>Heure de début</Label>
+                                <Input 
+                                    id={`schedule.${index}.startTime`}
+                                    type="time" 
+                                    {...weeklyRegister(`schedule.${index}.startTime`)} 
+                                    disabled={!currentDayValues.isWorkingDay}
+                                    className={weeklyErrors.schedule?.[index]?.startTime || (currentDayValues.isWorkingDay && !currentDayValues.startTime) ? "border-destructive" : ""}
+                                />
+                                
+                            </div>
+                            <div className="md:col-span-1">
+                                <Label htmlFor={`schedule.${index}.endTime`}>Heure de fin</Label>
+                                <Input 
+                                    id={`schedule.${index}.endTime`}
+                                    type="time" 
+                                    {...weeklyRegister(`schedule.${index}.endTime`)} 
+                                    disabled={!currentDayValues.isWorkingDay}
+                                    className={weeklyErrors.schedule?.[index]?.endTime || (currentDayValues.isWorkingDay && !currentDayValues.endTime) ? "border-destructive" : ""}
+                                />
+                            </div>
+                            {weeklyErrors.schedule?.[index]?.startTime && <p className="text-sm text-destructive md:col-span-4 text-center -mt-2">{weeklyErrors.schedule[index]?.startTime?.message}</p>}
+                            {/* Gérer le cas où startTime est rempli mais pas endTime ou vice-versa pour un jour travaillé */}
+                            {currentDayValues.isWorkingDay && (!currentDayValues.startTime || !currentDayValues.endTime) && !weeklyErrors.schedule?.[index]?.startTime && (
+                                <p className="text-sm text-destructive md:col-span-4 text-center -mt-2">Les heures de début et de fin sont requises.</p>
+                            )}
+                        </div>
+                      );
+                  })}
                    <Button type="submit" className="w-full mt-6">
                       <Save className="mr-2 h-5 w-5" /> Enregistrer l'Horaire Hebdomadaire
                   </Button>
@@ -234,7 +232,9 @@ export default function DoctorAvailabilityPage() {
                 <form onSubmit={handleAbsenceSubmit(onAbsenceSubmit)} className="space-y-4">
                     <div>
                         <Label htmlFor="absenceDate">Date de l'absence</Label>
-                        <Input id="absenceDate" type="date" {...absenceRegister("date")} />
+                        <Input id="absenceDate" type="date" {...absenceRegister("date")} 
+                          min={format(new Date(), "yyyy-MM-dd")} // Empêche de sélectionner des dates passées
+                        />
                         {absenceErrors.date && <p className="text-sm text-destructive mt-1">{absenceErrors.date.message}</p>}
                     </div>
                     <div className="flex items-center space-x-2">
@@ -251,16 +251,20 @@ export default function DoctorAvailabilityPage() {
                         />
                         <Label htmlFor="isFullDay">Absence journée entière</Label>
                     </div>
-                    {!absenceControl.getValues("isFullDay") && (
+                    {!absenceIsFullDay && (
                         <>
                             <div>
                                 <Label htmlFor="absenceStartTime">Heure de début (si partielle)</Label>
-                                <Input id="absenceStartTime" type="time" {...absenceRegister("startTime")} />
+                                <Input id="absenceStartTime" type="time" {...absenceRegister("startTime")} 
+                                  className={absenceErrors.startTime ? "border-destructive" : ""}
+                                />
                                 {absenceErrors.startTime && <p className="text-sm text-destructive mt-1">{absenceErrors.startTime.message}</p>}
                             </div>
                             <div>
                                 <Label htmlFor="absenceEndTime">Heure de fin (si partielle)</Label>
-                                <Input id="absenceEndTime" type="time" {...absenceRegister("endTime")} />
+                                <Input id="absenceEndTime" type="time" {...absenceRegister("endTime")} 
+                                  className={absenceErrors.endTime && !absenceErrors.startTime ? "border-destructive" : ""}
+                                />
                                 {absenceErrors.endTime && !absenceErrors.startTime && <p className="text-sm text-destructive mt-1">{absenceErrors.endTime.message}</p>}
                             </div>
                         </>
@@ -284,11 +288,11 @@ export default function DoctorAvailabilityPage() {
                             <p className="font-semibold">{format(parseISO(abs.date), "eeee d MMMM yyyy", { locale: fr })}</p>
                             <p className="text-sm text-muted-foreground flex items-center">
                                 <Clock className="mr-1 h-4 w-4" /> 
-                                {abs.isFullDay ? "Journée entière" : `${abs.startTime} - ${abs.endTime}`}
+                                {abs.isFullDay ? "Journée entière" : `${abs.startTime || 'N/A'} - ${abs.endTime || 'N/A'}`}
                             </p>
                             {abs.reason && <p className="text-xs text-muted-foreground">Motif: {abs.reason}</p>}
                         </div>
-                        <Button variant="destructive" size="sm" onClick={() => handleDeleteAbsence(abs.id)}>
+                        <Button variant="destructive" size="sm" onClick={() => handleDeleteAbsence(abs.id)} title="Supprimer l'absence">
                             <Trash2 className="h-4 w-4" />
                         </Button>
                         </li>
@@ -315,5 +319,3 @@ export default function DoctorAvailabilityPage() {
     </div>
   );
 }
-
-    
