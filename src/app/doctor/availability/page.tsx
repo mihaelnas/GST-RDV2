@@ -18,6 +18,7 @@ import { format, parseISO, parse } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils'; // Added import
 
 // Exporting for use in AppointmentScheduler's mock data
 export interface DayOfWeek {
@@ -34,17 +35,17 @@ const dayOfWeekSchema = z.object({
   endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Format HH:MM requis." }).optional().or(z.literal('')),
 }).refine(data => {
   if (data.isWorkingDay) {
-    // If it's a working day, both times must be present and valid
-    if (!data.startTime || !data.endTime) return false; // Both required
+    if (!data.startTime || data.startTime.trim() === '') return false; // Start time required if working
+    if (!data.endTime || data.endTime.trim() === '') return false; // End time required if working
     try {
       const start = parse(data.startTime, 'HH:mm', new Date());
       const end = parse(data.endTime, 'HH:mm', new Date());
       return start < end;
     } catch (e) {
-      return false; // Invalid time format will throw, caught by regex but good to be safe
+      return false; 
     }
   }
-  return true; // Not a working day, or times are valid
+  return true; 
 }, {
   message: "Si le jour est travaillé, les heures de début et de fin sont requises et le début doit précéder la fin.",
   path: ["startTime"], 
@@ -86,7 +87,7 @@ interface Absence extends AbsenceFormValues {
   id: string;
 }
 
-const daysOfWeek = [
+const daysOfWeekList = [
   { name: "Lundi", index: 1 },
   { name: "Mardi", index: 2 },
   { name: "Mercredi", index: 3 },
@@ -96,13 +97,12 @@ const daysOfWeek = [
   { name: "Dimanche", index: 0 },
 ];
 
-// Default: All days are working days, but times need to be specified by the doctor
 const defaultDoctorWeeklySchedule: WeeklyScheduleFormValues = {
-  schedule: daysOfWeek.map(day => ({
+  schedule: daysOfWeekList.map(day => ({
     dayName: day.name,
-    isWorkingDay: true, 
-    startTime: day.name === "Samedi" || day.name === "Dimanche" ? "" : "09:00", // Example for Mon-Fri
-    endTime: day.name === "Samedi" || day.name === "Dimanche" ? "" : "17:00", // Example for Mon-Fri
+    isWorkingDay: true, // All days are working by default
+    startTime: "", // Times are empty by default, doctor needs to fill them
+    endTime: "",
   })),
 };
 
@@ -185,14 +185,19 @@ export default function DoctorAvailabilityPage() {
           <CardHeader>
               <CardTitle className="flex items-center"><ListChecks className="mr-2 h-6 w-6"/>Mon Horaire Hebdomadaire Récurrent</CardTitle>
               <CardDescription>
-                Par défaut, tous les jours sont cochés comme travaillés. 
-                Veuillez spécifier vos heures (début et fin) pour chaque jour de travail, ou décochez les jours non travaillés.
+                Par défaut, tous les jours sont cochés comme potentiellement travaillés. 
+                Veuillez spécifier vos heures (début et fin) pour chaque jour de travail effectif, ou décochez les jours non travaillés.
+                Les heures doivent être au format HH:MM (ex: 09:00).
               </CardDescription>
           </CardHeader>
           <CardContent>
               <form onSubmit={handleWeeklySubmit(onWeeklySubmit)} className="space-y-6">
                   {weeklyFields.map((field, index) => {
                       const currentDayValues = watchWeeklySchedule(`schedule.${index}`);
+                      const hasStartTimeError = !!weeklyErrors.schedule?.[index]?.startTime;
+                      const hasEndTimeError = !!weeklyErrors.schedule?.[index]?.endTime;
+                      const isMissingTimeIfWorking = currentDayValues.isWorkingDay && (!currentDayValues.startTime || !currentDayValues.endTime);
+                      
                       return (
                         <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 items-center gap-4 p-3 border rounded-md bg-card hover:bg-muted/30 transition-colors">
                             <div className="md:col-span-1 flex items-center space-x-3">
@@ -217,7 +222,7 @@ export default function DoctorAvailabilityPage() {
                                     {...weeklyRegister(`schedule.${index}.startTime`)} 
                                     disabled={!currentDayValues.isWorkingDay}
                                     className={cn(
-                                      (weeklyErrors.schedule?.[index]?.startTime || (currentDayValues.isWorkingDay && !currentDayValues.startTime && !weeklyErrors.schedule?.[index]?.endTime)) ? "border-destructive" : ""
+                                      (hasStartTimeError || (isMissingTimeIfWorking && !hasEndTimeError)) ? "border-destructive" : ""
                                     )}
                                 />
                                 
@@ -230,15 +235,15 @@ export default function DoctorAvailabilityPage() {
                                     {...weeklyRegister(`schedule.${index}.endTime`)} 
                                     disabled={!currentDayValues.isWorkingDay}
                                      className={cn(
-                                      (weeklyErrors.schedule?.[index]?.endTime || (currentDayValues.isWorkingDay && !currentDayValues.endTime && !weeklyErrors.schedule?.[index]?.startTime)) ? "border-destructive" : ""
+                                      (hasEndTimeError || (isMissingTimeIfWorking && !hasStartTimeError)) ? "border-destructive" : ""
                                     )}
                                 />
                             </div>
-                             {weeklyErrors.schedule?.[index]?.startTime && <p className="text-sm text-destructive md:col-span-4 text-center -mt-2">{weeklyErrors.schedule[index]?.startTime?.message}</p>}
-                             {!weeklyErrors.schedule?.[index]?.startTime && weeklyErrors.schedule?.[index]?.endTime && <p className="text-sm text-destructive md:col-span-4 text-center -mt-2">{weeklyErrors.schedule[index]?.endTime?.message}</p>}
-                             {currentDayValues.isWorkingDay && ((!currentDayValues.startTime && !weeklyErrors.schedule?.[index]?.endTime) || (!currentDayValues.endTime && !weeklyErrors.schedule?.[index]?.startTime)) && !weeklyErrors.schedule?.[index]?.startTime && !weeklyErrors.schedule?.[index]?.endTime && (
-                                <p className="text-sm text-destructive md:col-span-4 text-center -mt-2">Les heures de début et de fin sont requises.</p>
-                            )}
+                             {weeklyErrors.schedule?.[index] && (
+                                <p className="text-sm text-destructive md:col-span-4 text-center -mt-2">
+                                    {weeklyErrors.schedule[index]?.startTime?.message || weeklyErrors.schedule[index]?.endTime?.message || (isMissingTimeIfWorking ? "Les heures de début et de fin sont requises si le jour est travaillé." : "")}
+                                </p>
+                             )}
                         </div>
                       );
                   })}
@@ -291,9 +296,9 @@ export default function DoctorAvailabilityPage() {
                             <div>
                                 <Label htmlFor="absenceEndTime">Heure de fin (si partielle)</Label>
                                 <Input id="absenceEndTime" type="time" {...absenceRegister("endTime")} 
-                                  className={absenceErrors.endTime && !absenceErrors.startTime ? "border-destructive" : ""} // Show only if startTime is not also erroring for the same refine issue
+                                  className={absenceErrors.endTime && !absenceErrors.startTime ? "border-destructive" : ""} 
                                 />
-                                 {/* Show general refine error if not specifically startTime */}
+                                 
                                 {absenceErrors.startTime && absenceErrors.startTime.type === 'refinement' && !absenceErrors.endTime && (
                                      <p className="text-sm text-destructive mt-1">{absenceErrors.startTime.message}</p>
                                 )}
@@ -351,5 +356,3 @@ export default function DoctorAvailabilityPage() {
     </div>
   );
 }
-
-    
