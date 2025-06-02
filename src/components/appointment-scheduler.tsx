@@ -4,14 +4,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
-import { 
-  AlertDialog, 
-  AlertDialogAction, 
-  AlertDialogCancel, 
-  AlertDialogContent, 
-  AlertDialogDescription, 
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogHeader, 
+  AlertDialogHeader,
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useRouter } from 'next/navigation';
-import type { DayOfWeek } from '@/app/doctor/availability/page'; 
+import type { DayOfWeek } from '@/app/doctor/availability/page';
 import { sendPatientConfirmationEmail, sendDoctorAppointmentNotificationEmail } from '@/ai/flows/notificationFlow';
 import type { AppointmentNotificationInput } from '@/ai/flows/notificationFlow';
 
@@ -94,7 +94,7 @@ const mockDoctorsData: Doctor[] = [
     name: 'Dr. Chloé Lambert',
     specialty: 'Dermatologie',
     email: 'chloe.lambert@example.com',
-     weeklySchedule: [ 
+     weeklySchedule: [
       { dayName: 'Lundi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
       { dayName: 'Mardi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
       { dayName: 'Mercredi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
@@ -111,14 +111,14 @@ const mockDoctorsData: Doctor[] = [
 
 
 const generateAppointmentsForDate = (
-  date: Date, 
+  date: Date,
   globalBookings: Appointment[],
-  selectedDoctor?: Doctor 
+  selectedDoctor?: Doctor
 ): Appointment[] => {
   const appointments: Appointment[] = [];
   const targetDate = startOfDay(date);
-  
-  const dayOfWeekIndex = getDay(targetDate); 
+
+  const dayOfWeekIndex = getDay(targetDate);
   const dayNames = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
   const currentDayName = dayNames[dayOfWeekIndex];
 
@@ -126,27 +126,28 @@ const generateAppointmentsForDate = (
     return [];
   }
 
-  if (!selectedDoctor) return []; // Require a doctor to be selected
+  if (!selectedDoctor) return [];
 
   let doctorWorkDay = selectedDoctor.weeklySchedule.find(d => d.dayName === currentDayName);
 
   if (!doctorWorkDay || !doctorWorkDay.isWorkingDay || !doctorWorkDay.startTime || !doctorWorkDay.endTime) {
-    return []; // Doctor not working or schedule incomplete
+    return [];
   }
-  
-  const fullDayAbsence = selectedDoctor.absences.find(abs => 
+
+  const fullDayAbsence = selectedDoctor.absences.find(abs =>
       isEqual(startOfDay(parse(abs.date, 'yyyy-MM-dd', new Date())), targetDate) && abs.isFullDay
   );
   if (fullDayAbsence) return [];
 
-  const interval = 30; 
+  const interval = 30;
   const [startHour, startMinute] = doctorWorkDay.startTime.split(':').map(Number);
   const [endHour, endMinute] = doctorWorkDay.endTime.split(':').map(Number);
 
-  for (let hour = startHour; hour < endHour || (hour === endHour && minute < endMinute); ) {
-    for (let minute = (hour === startHour ? startMinute : 0) ; minute < 60; minute += interval) {
-      if (hour === endHour && minute >= endMinute) break;
+  for (let hour = startHour; hour <= endHour; hour++) {
+    const currentLoopMinuteStart = (hour === startHour) ? startMinute : 0;
+    const currentLoopMinuteEnd = (hour === endHour) ? endMinute : 60;
 
+    for (let minute = currentLoopMinuteStart; minute < currentLoopMinuteEnd; minute += interval) {
       const slotDateTime = set(targetDate, { hours: hour, minutes: minute, seconds: 0, milliseconds: 0 });
 
       if (isEqual(targetDate, startOfDay(new Date())) && slotDateTime.getTime() <= new Date().getTime()) {
@@ -154,24 +155,24 @@ const generateAppointmentsForDate = (
       }
 
       let isPartialAbsence = false;
-      const partialAbsence = selectedDoctor.absences.find(abs => 
-        isEqual(startOfDay(parse(abs.date, 'yyyy-MM-dd', new Date())), targetDate) && 
+      const partialAbsence = selectedDoctor.absences.find(abs =>
+        isEqual(startOfDay(parse(abs.date, 'yyyy-MM-dd', new Date())), targetDate) &&
         !abs.isFullDay && abs.startTime && abs.endTime
       );
       if (partialAbsence) {
-        const absenceStart = set(targetDate, { hours: parseInt(partialAbsence.startTime!.split(':')[0]), minutes: parseInt(partialAbsence.startTime!.split(':')[1])});
-        const absenceEnd = set(targetDate, { hours: parseInt(partialAbsence.endTime!.split(':')[0]), minutes: parseInt(partialAbsence.endTime!.split(':')[1])});
-        if (slotDateTime >= absenceStart && slotDateTime < absenceEnd) {
+        const absenceStartDateTime = set(targetDate, { hours: parseInt(partialAbsence.startTime!.split(':')[0]), minutes: parseInt(partialAbsence.startTime!.split(':')[1])});
+        const absenceEndDateTime = set(targetDate, { hours: parseInt(partialAbsence.endTime!.split(':')[0]), minutes: parseInt(partialAbsence.endTime!.split(':')[1])});
+        if (slotDateTime >= absenceStartDateTime && slotDateTime < absenceEndDateTime) {
           isPartialAbsence = true;
         }
       }
       if (isPartialAbsence) continue;
 
-      const isAlreadyBooked = globalBookings.some(bookedApp => 
-        isEqual(startOfDay(bookedApp.dateTime), targetDate) && 
+      const isAlreadyBooked = globalBookings.some(bookedApp =>
+        isEqual(startOfDay(bookedApp.dateTime), targetDate) &&
         bookedApp.dateTime.getHours() === slotDateTime.getHours() &&
         bookedApp.dateTime.getMinutes() === slotDateTime.getMinutes() &&
-        bookedApp.doctorId === selectedDoctor.id 
+        bookedApp.doctorId === selectedDoctor.id
       );
 
       appointments.push({
@@ -183,7 +184,6 @@ const generateAppointmentsForDate = (
         doctorName: selectedDoctor.name,
       });
     }
-    hour++;
   }
   return appointments.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 };
@@ -201,7 +201,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allBookedAppointments, setAllBookedAppointments] = useState<Appointment[]>([]);
-  
+
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | undefined>(mockDoctorsData[0]?.id); // Default to first doctor
   const selectedDoctor = useMemo(() => mockDoctorsData.find(doc => doc.id === selectedDoctorId), [selectedDoctorId]);
 
@@ -219,15 +219,15 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
     setAppointments(generateAppointmentsForDate(selectedDate, allBookedAppointments, selectedDoctor));
   }, [selectedDate, allBookedAppointments, selectedDoctor]);
 
-  const availableSlots = useMemo(() => 
-    appointments.filter(app => !app.isBooked), 
+  const availableSlots = useMemo(() =>
+    appointments.filter(app => !app.isBooked),
     [appointments]
   );
 
-  const patientBookedSlots = useMemo(() => 
+  const patientBookedSlots = useMemo(() =>
     allBookedAppointments
-      .filter(app => app.isBooked && (isLoggedIn && app.patientId === SIMULATED_LOGGED_IN_PATIENT.id)) 
-      .sort((a,b) => a.dateTime.getTime() - b.dateTime.getTime()), 
+      .filter(app => app.isBooked && (isLoggedIn && app.patientId === SIMULATED_LOGGED_IN_PATIENT.id))
+      .sort((a,b) => a.dateTime.getTime() - b.dateTime.getTime()),
     [allBookedAppointments, isLoggedIn]
   );
 
@@ -262,13 +262,13 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
     setAnimateId(selectedAppointment.id);
 
     if (dialogAction === 'book') {
-      if (!isLoggedIn || !selectedDoctor) { 
+      if (!isLoggedIn || !selectedDoctor) {
         router.push('/login');
         setShowDialog(false);
         return;
       }
-      const bookedAppointmentData: Appointment = { 
-        ...selectedAppointment, 
+      const bookedAppointmentData: Appointment = {
+        ...selectedAppointment,
         isBooked: true,
         doctorId: selectedDoctor.id,
         doctorName: selectedDoctor.name,
@@ -313,11 +313,11 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
         variant: "destructive"
       });
     }
-    
+
     setTimeout(() => {
       setAnimateId(null);
       setAnimationType(null);
-    }, 600); 
+    }, 600);
 
     setShowDialog(false);
     setSelectedAppointment(null);
@@ -394,7 +394,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                         const newSelectedDay = startOfDay(date);
                         if (newSelectedDay >= today) {
                             setSelectedDate(date);
-                            setPopoverOpen(false); 
+                            setPopoverOpen(false);
                         } else {
                             toast({
                             title: "Date non valide",
@@ -428,8 +428,8 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                 {selectedDoctorId && availableSlots.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {availableSlots.map(app => (
-                    <Card 
-                        key={app.id} 
+                    <Card
+                        key={app.id}
                         className={cn(
                         "shadow-md hover:shadow-lg transition-all duration-300 flex flex-col text-center group",
                         animateId === app.id && animationType === 'booked' ? "animate-out fade-out-50 duration-500" : "animate-in fade-in-0 duration-500"
@@ -444,12 +444,12 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                         </CardDescription>
                         </CardHeader>
                         <CardFooter className="p-3">
-                        <Button 
+                        <Button
                             variant={isLoggedIn ? "default" : "secondary"}
                             size="sm"
                             className="w-full bg-accent hover:bg-accent/90 text-accent-foreground group-hover:scale-105 transition-transform"
                             onClick={() => handleOpenDialog(app, 'book')}
-                            disabled={!isLoggedIn && false} 
+                            disabled={!isLoggedIn && false}
                         >
                             <CalendarCheck className="mr-2 h-4 w-4" />
                             {isLoggedIn ? "Réserver" : "Se connecter"}
@@ -484,8 +484,8 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
             {patientBookedSlots.map(app => (
-              <Card 
-                key={app.id} 
+              <Card
+                key={app.id}
                 className={cn(
                   "shadow-lg border-l-4 border-primary bg-card flex flex-col",
                   animateId === app.id && animationType === 'cancelled' ? "animate-out fade-out-50 duration-500" : "animate-in fade-in-0 duration-500"
@@ -504,9 +504,9 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                   <p className="text-sm font-semibold text-accent">Confirmé</p>
                 </CardContent>
                 <CardFooter className="p-4">
-                  <Button 
-                    variant="destructive" 
-                    className="w-full" 
+                  <Button
+                    variant="destructive"
+                    className="w-full"
                     onClick={() => handleOpenDialog(app, 'cancel')}
                   >
                     <CalendarX className="mr-2 h-4 w-4" />
@@ -518,7 +518,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
           </div>
         </section>
       )}
-      
+
       {isLoggedIn && patientBookedSlots.length === 0 && (
          <Card className="p-8 text-center mt-10 bg-muted/30 rounded-lg">
             <Info className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
@@ -549,7 +549,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
             </AlertDialogHeader>
             <AlertDialogFooter className="mt-4">
               <AlertDialogCancel onClick={handleCloseDialog}>Non, retour</AlertDialogCancel>
-              <AlertDialogAction 
+              <AlertDialogAction
                 onClick={handleConfirmDialog}
                 className={cn(
                   dialogAction === 'book' ? 'bg-primary hover:bg-primary/90' : 'bg-destructive hover:bg-destructive/90',
