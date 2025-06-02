@@ -15,7 +15,7 @@ import {
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar as CalendarIcon, Clock, CalendarDays, CheckCircle2, Info, CalendarCheck, CalendarX, UserCheck, User } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, CalendarDays, CheckCircle2, Info, CalendarCheck, CalendarX, UserCheck, User, MailWarning } from 'lucide-react';
 import { format, isPast, startOfDay, isEqual, set, getDay, parse } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from "@/hooks/use-toast";
@@ -23,7 +23,10 @@ import { cn } from "@/lib/utils";
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useRouter } from 'next/navigation';
-import type { DayOfWeek } from '@/app/doctor/availability/page'; // Import type for consistency
+import type { DayOfWeek } from '@/app/doctor/availability/page'; 
+import { sendPatientConfirmationEmail, sendDoctorAppointmentNotificationEmail } from '@/ai/flows/notificationFlow';
+import type { AppointmentNotificationInput } from '@/ai/flows/notificationFlow';
+
 
 interface Appointment {
   id: string;
@@ -32,19 +35,22 @@ interface Appointment {
   isBooked: boolean;
   doctorId?: string;
   doctorName?: string;
+  patientId?: string; // Simulate patient booking
+  patientName?: string; // Simulate patient name
 }
 
 interface AppointmentSchedulerProps {
   isLoggedIn: boolean;
+  // For simulation, if logged in, we might have a patient's info
+  loggedInPatientInfo?: { id: string; name: string; email: string };
 }
 
-// --- Mocked Doctor Data with Schedules & Absences ---
-// This data would typically come from a backend or global state
 interface Doctor {
   id: string;
   name: string;
   specialty: string;
-  weeklySchedule: DayOfWeek[]; // Matches structure from doctor/availability/page.tsx
+  email: string; // Added for notifications
+  weeklySchedule: DayOfWeek[];
   absences: Array<{ id: string; date: string; isFullDay: boolean; startTime?: string; endTime?: string; reason?: string }>;
 }
 
@@ -53,6 +59,7 @@ const mockDoctorsData: Doctor[] = [
     id: 'doc1',
     name: 'Dr. Alice Martin',
     specialty: 'Cardiologie',
+    email: 'alice.martin@example.com',
     weeklySchedule: [
       { dayName: 'Lundi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
       { dayName: 'Mardi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
@@ -70,6 +77,7 @@ const mockDoctorsData: Doctor[] = [
     id: 'doc2',
     name: 'Dr. Bernard Dubois',
     specialty: 'Pédiatrie',
+    email: 'bernard.dubois@example.com',
     weeklySchedule: [
       { dayName: 'Lundi', isWorkingDay: true, startTime: '08:00', endTime: '12:00' },
       { dayName: 'Mardi', isWorkingDay: true, startTime: '08:00', endTime: '12:00' },
@@ -85,7 +93,8 @@ const mockDoctorsData: Doctor[] = [
     id: 'doc3',
     name: 'Dr. Chloé Lambert',
     specialty: 'Dermatologie',
-     weeklySchedule: [ // Full week example
+    email: 'chloe.lambert@example.com',
+     weeklySchedule: [ 
       { dayName: 'Lundi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
       { dayName: 'Mardi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
       { dayName: 'Mercredi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
@@ -99,7 +108,6 @@ const mockDoctorsData: Doctor[] = [
     ],
   },
 ];
-// --- End Mocked Data ---
 
 
 const generateAppointmentsForDate = (
@@ -109,9 +117,8 @@ const generateAppointmentsForDate = (
 ): Appointment[] => {
   const appointments: Appointment[] = [];
   const targetDate = startOfDay(date);
-  const dayOfWeekIndex = getDay(targetDate); // Sunday = 0, Monday = 1, ... Saturday = 6
-  // Adjust to match our DayOfWeek[] structure where Monday is often first.
-  // fr locale in date-fns has Monday as 1. We need to map to dayName.
+  
+  const dayOfWeekIndex = getDay(targetDate); 
   const dayNames = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
   const currentDayName = dayNames[dayOfWeekIndex];
 
@@ -119,79 +126,61 @@ const generateAppointmentsForDate = (
     return [];
   }
 
-  const interval = 30; // Appointment slot duration
+  if (!selectedDoctor) return []; // Require a doctor to be selected
 
-  let doctorWorkDay = null;
-  if (selectedDoctor) {
-    doctorWorkDay = selectedDoctor.weeklySchedule.find(d => d.dayName === currentDayName);
-  }
+  let doctorWorkDay = selectedDoctor.weeklySchedule.find(d => d.dayName === currentDayName);
 
-  // If no doctor selected, or selected doctor doesn't work that day or has no specified hours
-  if (!selectedDoctor || !doctorWorkDay || !doctorWorkDay.isWorkingDay || !doctorWorkDay.startTime || !doctorWorkDay.endTime) {
-    // Fallback to generic clinic hours if no doctor or specific schedule is missing
-    // Or, if a doctor is selected but not working, return empty. Let's choose the latter.
-    if (selectedDoctor && (!doctorWorkDay || !doctorWorkDay.isWorkingDay)) return [];
-    
-    // If no doctor is selected, we can't determine specific hours.
-    // For this version, let's require a doctor to be selected to show slots.
-    if (!selectedDoctor) return [];
+  if (!doctorWorkDay || !doctorWorkDay.isWorkingDay || !doctorWorkDay.startTime || !doctorWorkDay.endTime) {
+    return []; // Doctor not working or schedule incomplete
   }
   
-  // Check for full-day absence for the selected doctor
-  if (selectedDoctor) {
-    const fullDayAbsence = selectedDoctor.absences.find(abs => 
-        isEqual(startOfDay(parse(abs.date, 'yyyy-MM-dd', new Date())), targetDate) && abs.isFullDay
-    );
-    if (fullDayAbsence) return []; // Doctor is absent the whole day
-  }
+  const fullDayAbsence = selectedDoctor.absences.find(abs => 
+      isEqual(startOfDay(parse(abs.date, 'yyyy-MM-dd', new Date())), targetDate) && abs.isFullDay
+  );
+  if (fullDayAbsence) return [];
 
+  const interval = 30; 
+  const [startHour, startMinute] = doctorWorkDay.startTime.split(':').map(Number);
+  const [endHour, endMinute] = doctorWorkDay.endTime.split(':').map(Number);
 
-  const [startHour, startMinute] = doctorWorkDay!.startTime!.split(':').map(Number);
-  const [endHour, endMinute] = doctorWorkDay!.endTime!.split(':').map(Number);
-
-  for (let hour = startHour; hour < endHour || (hour === endHour && startMinute < endMinute); ) {
+  for (let hour = startHour; hour < endHour || (hour === endHour && minute < endMinute); ) {
     for (let minute = (hour === startHour ? startMinute : 0) ; minute < 60; minute += interval) {
       if (hour === endHour && minute >= endMinute) break;
 
       const slotDateTime = set(targetDate, { hours: hour, minutes: minute, seconds: 0, milliseconds: 0 });
 
-      // Skip past slots on the current day
       if (isEqual(targetDate, startOfDay(new Date())) && slotDateTime.getTime() <= new Date().getTime()) {
         continue;
       }
 
-      // Check for partial absence for the selected doctor
       let isPartialAbsence = false;
-      if (selectedDoctor) {
-        const partialAbsence = selectedDoctor.absences.find(abs => 
-          isEqual(startOfDay(parse(abs.date, 'yyyy-MM-dd', new Date())), targetDate) && 
-          !abs.isFullDay && abs.startTime && abs.endTime
-        );
-        if (partialAbsence) {
-          const absenceStart = set(targetDate, { hours: parseInt(partialAbsence.startTime!.split(':')[0]), minutes: parseInt(partialAbsence.startTime!.split(':')[1])});
-          const absenceEnd = set(targetDate, { hours: parseInt(partialAbsence.endTime!.split(':')[0]), minutes: parseInt(partialAbsence.endTime!.split(':')[1])});
-          if (slotDateTime >= absenceStart && slotDateTime < absenceEnd) {
-            isPartialAbsence = true;
-          }
+      const partialAbsence = selectedDoctor.absences.find(abs => 
+        isEqual(startOfDay(parse(abs.date, 'yyyy-MM-dd', new Date())), targetDate) && 
+        !abs.isFullDay && abs.startTime && abs.endTime
+      );
+      if (partialAbsence) {
+        const absenceStart = set(targetDate, { hours: parseInt(partialAbsence.startTime!.split(':')[0]), minutes: parseInt(partialAbsence.startTime!.split(':')[1])});
+        const absenceEnd = set(targetDate, { hours: parseInt(partialAbsence.endTime!.split(':')[0]), minutes: parseInt(partialAbsence.endTime!.split(':')[1])});
+        if (slotDateTime >= absenceStart && slotDateTime < absenceEnd) {
+          isPartialAbsence = true;
         }
       }
       if (isPartialAbsence) continue;
 
-
       const isAlreadyBooked = globalBookings.some(bookedApp => 
-        isEqual(startOfDay(bookedApp.dateTime), targetDate) && // Check date first for efficiency
+        isEqual(startOfDay(bookedApp.dateTime), targetDate) && 
         bookedApp.dateTime.getHours() === slotDateTime.getHours() &&
         bookedApp.dateTime.getMinutes() === slotDateTime.getMinutes() &&
-        (selectedDoctor ? bookedApp.doctorId === selectedDoctor.id : true) // Check doctor if selected
+        bookedApp.doctorId === selectedDoctor.id 
       );
 
       appointments.push({
-        id: format(slotDateTime, 'yyyyMMddHHmm') + (selectedDoctor ? `_doc${selectedDoctor.id}` : ''),
+        id: format(slotDateTime, 'yyyyMMddHHmm') + `_doc${selectedDoctor.id}`,
         dateTime: slotDateTime,
         durationMinutes: interval,
         isBooked: isAlreadyBooked,
-        doctorId: selectedDoctor?.id,
-        doctorName: selectedDoctor?.name,
+        doctorId: selectedDoctor.id,
+        doctorName: selectedDoctor.name,
       });
     }
     hour++;
@@ -200,12 +189,20 @@ const generateAppointmentsForDate = (
 };
 
 
+// Simulate logged-in patient info for demo
+const SIMULATED_LOGGED_IN_PATIENT = {
+  id: 'patientX',
+  name: 'Patient Connecté',
+  email: 'patient.connecte@example.com',
+};
+
+
 export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedulerProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allBookedAppointments, setAllBookedAppointments] = useState<Appointment[]>([]);
   
-  const [selectedDoctorId, setSelectedDoctorId] = useState<string | undefined>(undefined);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string | undefined>(mockDoctorsData[0]?.id); // Default to first doctor
   const selectedDoctor = useMemo(() => mockDoctorsData.find(doc => doc.id === selectedDoctorId), [selectedDoctorId]);
 
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
@@ -229,10 +226,9 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
 
   const patientBookedSlots = useMemo(() => 
     allBookedAppointments
-      .filter(app => app.isBooked) // Assuming all in allBookedAppointments are booked by someone
-      // In a real app, you'd filter by the logged-in patient's ID here
+      .filter(app => app.isBooked && (isLoggedIn && app.patientId === SIMULATED_LOGGED_IN_PATIENT.id)) 
       .sort((a,b) => a.dateTime.getTime() - b.dateTime.getTime()), 
-    [allBookedAppointments]
+    [allBookedAppointments, isLoggedIn]
   );
 
   const handleOpenDialog = (appointment: Appointment, action: 'book' | 'cancel') => {
@@ -260,31 +256,54 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
     setShowDialog(true);
   };
 
-  const handleConfirmDialog = () => {
+  const handleConfirmDialog = async () => {
     if (!selectedAppointment || !dialogAction) return;
 
     setAnimateId(selectedAppointment.id);
 
     if (dialogAction === 'book') {
-      if (!isLoggedIn) { 
+      if (!isLoggedIn || !selectedDoctor) { 
         router.push('/login');
         setShowDialog(false);
         return;
       }
-      // Add doctorId and doctorName to the booked appointment
-      const bookedAppointmentData = { 
+      const bookedAppointmentData: Appointment = { 
         ...selectedAppointment, 
         isBooked: true,
-        doctorId: selectedDoctor?.id,
-        doctorName: selectedDoctor?.name,
+        doctorId: selectedDoctor.id,
+        doctorName: selectedDoctor.name,
+        patientId: SIMULATED_LOGGED_IN_PATIENT.id, // Simulate with logged-in patient
+        patientName: SIMULATED_LOGGED_IN_PATIENT.name,
       };
       setAllBookedAppointments(prev => [...prev, bookedAppointmentData]);
       setAnimationType('booked');
       toast({
         title: "Rendez-vous Confirmé!",
-        description: `Votre rendez-vous avec ${selectedDoctor?.name} pour le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} est confirmé. Un email de confirmation vous sera envoyé.`,
+        description: `Votre rendez-vous avec ${selectedDoctor.name} pour le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} est confirmé.`,
         className: "bg-accent text-accent-foreground"
       });
+
+      // Prepare notification data
+      const notificationInput: AppointmentNotificationInput = {
+        patientName: SIMULATED_LOGGED_IN_PATIENT.name,
+        patientEmail: SIMULATED_LOGGED_IN_PATIENT.email,
+        doctorName: selectedDoctor.name,
+        doctorEmail: selectedDoctor.email, // Ensure doctors have emails in mockDoctorsData
+        appointmentDateTime: selectedAppointment.dateTime,
+        appointmentId: selectedAppointment.id,
+      };
+
+      try {
+        const patientEmailResult = await sendPatientConfirmationEmail(notificationInput);
+        toast({ title: "Notification Patient", description: patientEmailResult.message });
+        const doctorEmailResult = await sendDoctorAppointmentNotificationEmail(notificationInput);
+        toast({ title: "Notification Médecin", description: doctorEmailResult.message });
+      } catch (error) {
+        console.error("Failed to send notifications:", error);
+        toast({ title: "Erreur de Notification", description: "Impossible d'envoyer les notifications par e-mail.", variant: "destructive" });
+      }
+
+
     } else if (dialogAction === 'cancel') {
       setAllBookedAppointments(prev => prev.filter(app => app.id !== selectedAppointment.id));
       setAnimationType('cancelled');
@@ -447,6 +466,12 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                     <p className="text-xs text-muted-foreground mt-1">Veuillez essayer une autre date ou un autre médecin.</p>
                 </div>
                 )}
+                 {!isLoggedIn && (
+                    <div className="mt-6 p-4 text-sm text-center bg-yellow-100 border border-yellow-300 text-yellow-700 rounded-md flex items-center justify-center">
+                        <MailWarning className="mr-2 h-5 w-5" />
+                        Connectez-vous pour activer les notifications par e-mail pour vos rendez-vous.
+                    </div>
+                )}
             </div>
         </CardContent>
       </Card>
@@ -540,5 +565,3 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
     </div>
   );
 }
-
-    
