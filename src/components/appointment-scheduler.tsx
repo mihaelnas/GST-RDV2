@@ -14,66 +14,200 @@ import {
   AlertDialogHeader, 
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
-import { Calendar as CalendarIcon, Clock, CalendarDays, CheckCircle2, Info, CalendarCheck, CalendarX, UserCheck } from 'lucide-react';
-import { format, isPast, startOfDay, isEqual, set } from 'date-fns';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Calendar as CalendarIcon, Clock, CalendarDays, CheckCircle2, Info, CalendarCheck, CalendarX, UserCheck, User } from 'lucide-react';
+import { format, isPast, startOfDay, isEqual, set, getDay, parse } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { useRouter } from 'next/navigation';
+import type { DayOfWeek } from '@/app/doctor/availability/page'; // Import type for consistency
 
 interface Appointment {
   id: string;
   dateTime: Date;
   durationMinutes: number;
   isBooked: boolean;
+  doctorId?: string;
+  doctorName?: string;
 }
 
 interface AppointmentSchedulerProps {
   isLoggedIn: boolean;
 }
 
-const generateAppointmentsForDate = (date: Date, globalBookings: Appointment[]): Appointment[] => {
-  const appointments: Appointment[] = [];
-  const targetDate = startOfDay(date); 
+// --- Mocked Doctor Data with Schedules & Absences ---
+// This data would typically come from a backend or global state
+interface Doctor {
+  id: string;
+  name: string;
+  specialty: string;
+  weeklySchedule: DayOfWeek[]; // Matches structure from doctor/availability/page.tsx
+  absences: Array<{ id: string; date: string; isFullDay: boolean; startTime?: string; endTime?: string; reason?: string }>;
+}
 
-  const startTime = 9;
-  const endTime = 17;
-  const interval = 30;
+const mockDoctorsData: Doctor[] = [
+  {
+    id: 'doc1',
+    name: 'Dr. Alice Martin',
+    specialty: 'Cardiologie',
+    weeklySchedule: [
+      { dayName: 'Lundi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
+      { dayName: 'Mardi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
+      { dayName: 'Mercredi', isWorkingDay: false, startTime: '', endTime: '' },
+      { dayName: 'Jeudi', isWorkingDay: true, startTime: '10:00', endTime: '18:00' },
+      { dayName: 'Vendredi', isWorkingDay: true, startTime: '09:00', endTime: '13:00' },
+      { dayName: 'Samedi', isWorkingDay: false, startTime: '', endTime: '' },
+      { dayName: 'Dimanche', isWorkingDay: false, startTime: '', endTime: '' },
+    ],
+    absences: [
+      { id: 'absDoc1_1', date: format(new Date(new Date().setDate(new Date().getDate() + 3)), 'yyyy-MM-dd'), isFullDay: true, reason: 'Conférence' }
+    ],
+  },
+  {
+    id: 'doc2',
+    name: 'Dr. Bernard Dubois',
+    specialty: 'Pédiatrie',
+    weeklySchedule: [
+      { dayName: 'Lundi', isWorkingDay: true, startTime: '08:00', endTime: '12:00' },
+      { dayName: 'Mardi', isWorkingDay: true, startTime: '08:00', endTime: '12:00' },
+      { dayName: 'Mercredi', isWorkingDay: true, startTime: '13:00', endTime: '17:00' },
+      { dayName: 'Jeudi', isWorkingDay: true, startTime: '13:00', endTime: '17:00' },
+      { dayName: 'Vendredi', isWorkingDay: false, startTime: '', endTime: '' },
+      { dayName: 'Samedi', isWorkingDay: true, startTime: '09:00', endTime: '12:00' },
+      { dayName: 'Dimanche', isWorkingDay: false, startTime: '', endTime: '' },
+    ],
+    absences: [],
+  },
+  {
+    id: 'doc3',
+    name: 'Dr. Chloé Lambert',
+    specialty: 'Dermatologie',
+     weeklySchedule: [ // Full week example
+      { dayName: 'Lundi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
+      { dayName: 'Mardi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
+      { dayName: 'Mercredi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
+      { dayName: 'Jeudi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
+      { dayName: 'Vendredi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
+      { dayName: 'Samedi', isWorkingDay: false, startTime: '', endTime: '' },
+      { dayName: 'Dimanche', isWorkingDay: false, startTime: '', endTime: '' },
+    ],
+    absences: [
+       { id: 'absDoc3_1', date: format(new Date(), 'yyyy-MM-dd'), isFullDay: false, startTime: '14:00', endTime: '17:00', reason: 'Rendez-vous personnel' }
+    ],
+  },
+];
+// --- End Mocked Data ---
+
+
+const generateAppointmentsForDate = (
+  date: Date, 
+  globalBookings: Appointment[],
+  selectedDoctor?: Doctor 
+): Appointment[] => {
+  const appointments: Appointment[] = [];
+  const targetDate = startOfDay(date);
+  const dayOfWeekIndex = getDay(targetDate); // Sunday = 0, Monday = 1, ... Saturday = 6
+  // Adjust to match our DayOfWeek[] structure where Monday is often first.
+  // fr locale in date-fns has Monday as 1. We need to map to dayName.
+  const dayNames = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
+  const currentDayName = dayNames[dayOfWeekIndex];
 
   if (isPast(targetDate) && !isEqual(targetDate, startOfDay(new Date()))) {
-      return [];
+    return [];
   }
 
-  for (let hour = startTime; hour < endTime; hour++) {
-    for (let minute = 0; minute < 60; minute += interval) {
+  const interval = 30; // Appointment slot duration
+
+  let doctorWorkDay = null;
+  if (selectedDoctor) {
+    doctorWorkDay = selectedDoctor.weeklySchedule.find(d => d.dayName === currentDayName);
+  }
+
+  // If no doctor selected, or selected doctor doesn't work that day or has no specified hours
+  if (!selectedDoctor || !doctorWorkDay || !doctorWorkDay.isWorkingDay || !doctorWorkDay.startTime || !doctorWorkDay.endTime) {
+    // Fallback to generic clinic hours if no doctor or specific schedule is missing
+    // Or, if a doctor is selected but not working, return empty. Let's choose the latter.
+    if (selectedDoctor && (!doctorWorkDay || !doctorWorkDay.isWorkingDay)) return [];
+    
+    // If no doctor is selected, we can't determine specific hours.
+    // For this version, let's require a doctor to be selected to show slots.
+    if (!selectedDoctor) return [];
+  }
+  
+  // Check for full-day absence for the selected doctor
+  if (selectedDoctor) {
+    const fullDayAbsence = selectedDoctor.absences.find(abs => 
+        isEqual(startOfDay(parse(abs.date, 'yyyy-MM-dd', new Date())), targetDate) && abs.isFullDay
+    );
+    if (fullDayAbsence) return []; // Doctor is absent the whole day
+  }
+
+
+  const [startHour, startMinute] = doctorWorkDay!.startTime!.split(':').map(Number);
+  const [endHour, endMinute] = doctorWorkDay!.endTime!.split(':').map(Number);
+
+  for (let hour = startHour; hour < endHour || (hour === endHour && startMinute < endMinute); ) {
+    for (let minute = (hour === startHour ? startMinute : 0) ; minute < 60; minute += interval) {
+      if (hour === endHour && minute >= endMinute) break;
+
       const slotDateTime = set(targetDate, { hours: hour, minutes: minute, seconds: 0, milliseconds: 0 });
 
+      // Skip past slots on the current day
       if (isEqual(targetDate, startOfDay(new Date())) && slotDateTime.getTime() <= new Date().getTime()) {
-        continue; 
+        continue;
       }
 
+      // Check for partial absence for the selected doctor
+      let isPartialAbsence = false;
+      if (selectedDoctor) {
+        const partialAbsence = selectedDoctor.absences.find(abs => 
+          isEqual(startOfDay(parse(abs.date, 'yyyy-MM-dd', new Date())), targetDate) && 
+          !abs.isFullDay && abs.startTime && abs.endTime
+        );
+        if (partialAbsence) {
+          const absenceStart = set(targetDate, { hours: parseInt(partialAbsence.startTime!.split(':')[0]), minutes: parseInt(partialAbsence.startTime!.split(':')[1])});
+          const absenceEnd = set(targetDate, { hours: parseInt(partialAbsence.endTime!.split(':')[0]), minutes: parseInt(partialAbsence.endTime!.split(':')[1])});
+          if (slotDateTime >= absenceStart && slotDateTime < absenceEnd) {
+            isPartialAbsence = true;
+          }
+        }
+      }
+      if (isPartialAbsence) continue;
+
+
       const isAlreadyBooked = globalBookings.some(bookedApp => 
-        isEqual(bookedApp.dateTime, slotDateTime)
+        isEqual(startOfDay(bookedApp.dateTime), targetDate) && // Check date first for efficiency
+        bookedApp.dateTime.getHours() === slotDateTime.getHours() &&
+        bookedApp.dateTime.getMinutes() === slotDateTime.getMinutes() &&
+        (selectedDoctor ? bookedApp.doctorId === selectedDoctor.id : true) // Check doctor if selected
       );
 
       appointments.push({
-        id: format(slotDateTime, 'yyyyMMddHHmm'), 
+        id: format(slotDateTime, 'yyyyMMddHHmm') + (selectedDoctor ? `_doc${selectedDoctor.id}` : ''),
         dateTime: slotDateTime,
         durationMinutes: interval,
         isBooked: isAlreadyBooked,
+        doctorId: selectedDoctor?.id,
+        doctorName: selectedDoctor?.name,
       });
     }
+    hour++;
   }
   return appointments.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 };
+
 
 export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedulerProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [allBookedAppointments, setAllBookedAppointments] = useState<Appointment[]>([]);
   
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string | undefined>(undefined);
+  const selectedDoctor = useMemo(() => mockDoctorsData.find(doc => doc.id === selectedDoctorId), [selectedDoctorId]);
+
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [dialogAction, setDialogAction] = useState<'book' | 'cancel' | null>(null);
   const [showDialog, setShowDialog] = useState(false);
@@ -84,30 +218,42 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
   const [animationType, setAnimationType] = useState<'booked' | 'cancelled' | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
 
-
   useEffect(() => {
-    setAppointments(generateAppointmentsForDate(selectedDate, allBookedAppointments));
-  }, [selectedDate, allBookedAppointments]);
+    setAppointments(generateAppointmentsForDate(selectedDate, allBookedAppointments, selectedDoctor));
+  }, [selectedDate, allBookedAppointments, selectedDoctor]);
 
   const availableSlots = useMemo(() => 
     appointments.filter(app => !app.isBooked), 
     [appointments]
   );
 
-  const bookedSlots = useMemo(() => 
-    allBookedAppointments.sort((a,b) => a.dateTime.getTime() - b.dateTime.getTime()), 
+  const patientBookedSlots = useMemo(() => 
+    allBookedAppointments
+      .filter(app => app.isBooked) // Assuming all in allBookedAppointments are booked by someone
+      // In a real app, you'd filter by the logged-in patient's ID here
+      .sort((a,b) => a.dateTime.getTime() - b.dateTime.getTime()), 
     [allBookedAppointments]
   );
 
   const handleOpenDialog = (appointment: Appointment, action: 'book' | 'cancel') => {
-    if (action === 'book' && !isLoggedIn) {
-      toast({
-        title: "Authentification requise",
-        description: "Veuillez vous connecter pour réserver un rendez-vous.",
-        variant: "destructive",
-      });
-      router.push('/login');
-      return;
+    if (action === 'book') {
+      if (!isLoggedIn) {
+        toast({
+          title: "Authentification requise",
+          description: "Veuillez vous connecter pour réserver un rendez-vous.",
+          variant: "destructive",
+        });
+        router.push('/login');
+        return;
+      }
+      if (!selectedDoctorId) {
+        toast({
+          title: "Médecin non sélectionné",
+          description: "Veuillez d'abord sélectionner un médecin.",
+          variant: "destructive",
+        });
+        return;
+      }
     }
     setSelectedAppointment(appointment);
     setDialogAction(action);
@@ -120,16 +266,23 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
     setAnimateId(selectedAppointment.id);
 
     if (dialogAction === 'book') {
-      if (!isLoggedIn) { // Double check, bien que handleOpenDialog devrait l'attraper
+      if (!isLoggedIn) { 
         router.push('/login');
         setShowDialog(false);
         return;
       }
-      setAllBookedAppointments(prev => [...prev, { ...selectedAppointment, isBooked: true }]);
+      // Add doctorId and doctorName to the booked appointment
+      const bookedAppointmentData = { 
+        ...selectedAppointment, 
+        isBooked: true,
+        doctorId: selectedDoctor?.id,
+        doctorName: selectedDoctor?.name,
+      };
+      setAllBookedAppointments(prev => [...prev, bookedAppointmentData]);
       setAnimationType('booked');
       toast({
         title: "Rendez-vous Confirmé!",
-        description: `Votre rendez-vous pour le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} est confirmé. Un email de confirmation vous sera envoyé.`,
+        description: `Votre rendez-vous avec ${selectedDoctor?.name} pour le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} est confirmé. Un email de confirmation vous sera envoyé.`,
         className: "bg-accent text-accent-foreground"
       });
     } else if (dialogAction === 'cancel') {
@@ -137,7 +290,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
       setAnimationType('cancelled');
       toast({
         title: "Rendez-vous Annulé",
-        description: `Votre rendez-vous pour le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} a été annulé.`,
+        description: `Votre rendez-vous avec ${selectedAppointment.doctorName || 'le médecin'} pour le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} a été annulé.`,
         variant: "destructive"
       });
     }
@@ -171,12 +324,34 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                 Planifier votre Rendez-vous
             </CardTitle>
             <CardDescription>
-                {isLoggedIn ? "Choisissez une date et un créneau horaire pour votre consultation." : "Connectez-vous pour choisir une date et un créneau horaire."}
+                {isLoggedIn ? "Choisissez un médecin, une date et un créneau horaire." : "Connectez-vous pour choisir un médecin, une date et un créneau horaire."}
             </CardDescription>
         </CardHeader>
-        <CardContent className="p-6 space-y-6">
+        <CardContent className="p-6 space-y-8">
             <div>
-                <h3 className="text-lg font-semibold mb-3 text-foreground">Sélectionnez une date :</h3>
+                <h3 className="text-lg font-semibold mb-3 text-foreground flex items-center">
+                    <User className="mr-2 h-5 w-5 text-primary"/>
+                    Sélectionnez un médecin :
+                </h3>
+                <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+                    <SelectTrigger className="w-full sm:w-[320px] text-base py-3 shadow-sm">
+                        <SelectValue placeholder="Choisir un médecin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {mockDoctorsData.map(doc => (
+                            <SelectItem key={doc.id} value={doc.id}>
+                                {doc.name} - {doc.specialty}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+
+            <div>
+                <h3 className="text-lg font-semibold mb-3 text-foreground flex items-center">
+                    <CalendarDays className="mr-2 h-5 w-5 text-primary"/>
+                    Sélectionnez une date :
+                </h3>
                 <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
                 <PopoverTrigger asChild>
                     <Button
@@ -222,10 +397,16 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                 <div className="flex items-center gap-2 mb-4">
                 <Clock className="h-6 w-6 text-primary" />
                 <h3 className="text-lg font-semibold text-foreground">
-                    Horaires disponibles pour le {format(selectedDate, "eeee d MMMM yyyy", { locale: fr })}
+                    Horaires disponibles pour {selectedDoctor ? selectedDoctor.name : 'le médecin sélectionné'} le {format(selectedDate, "eeee d MMMM yyyy", { locale: fr })}
                 </h3>
                 </div>
-                {availableSlots.length > 0 ? (
+                {!selectedDoctorId && (
+                     <div className="p-6 text-center col-span-full bg-muted/50 rounded-md">
+                        <Info className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
+                        <p className="text-md text-muted-foreground">Veuillez d'abord sélectionner un médecin pour voir les créneaux disponibles.</p>
+                    </div>
+                )}
+                {selectedDoctorId && availableSlots.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {availableSlots.map(app => (
                     <Card 
@@ -249,7 +430,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                             size="sm"
                             className="w-full bg-accent hover:bg-accent/90 text-accent-foreground group-hover:scale-105 transition-transform"
                             onClick={() => handleOpenDialog(app, 'book')}
-                            disabled={!isLoggedIn && false} // False pour ne pas griser visuellement mais la logique de redirection s'appliquera
+                            disabled={!isLoggedIn && false} 
                         >
                             <CalendarCheck className="mr-2 h-4 w-4" />
                             {isLoggedIn ? "Réserver" : "Se connecter"}
@@ -258,25 +439,26 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                     </Card>
                     ))}
                 </div>
-                ) : (
+                )}
+                {selectedDoctorId && availableSlots.length === 0 && (
                 <div className="p-6 text-center col-span-full bg-muted/50 rounded-md">
                     <Info className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-                    <p className="text-md text-muted-foreground">Aucun créneau disponible pour le {format(selectedDate, "eeee d MMMM yyyy", { locale: fr })}.</p>
-                    <p className="text-xs text-muted-foreground mt-1">Veuillez essayer une autre date.</p>
+                    <p className="text-md text-muted-foreground">Aucun créneau disponible pour {selectedDoctor?.name} le {format(selectedDate, "eeee d MMMM yyyy", { locale: fr })}.</p>
+                    <p className="text-xs text-muted-foreground mt-1">Veuillez essayer une autre date ou un autre médecin.</p>
                 </div>
                 )}
             </div>
         </CardContent>
       </Card>
 
-      {isLoggedIn && bookedSlots.length > 0 && (
+      {isLoggedIn && patientBookedSlots.length > 0 && (
         <section className="mt-12">
           <div className="flex items-center gap-3 mb-6">
             <UserCheck className="h-8 w-8 text-primary" />
             <h2 className="text-3xl font-headline font-semibold">Mes rendez-vous Confirmés</h2>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {bookedSlots.map(app => (
+            {patientBookedSlots.map(app => (
               <Card 
                 key={app.id} 
                 className={cn(
@@ -290,6 +472,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                      {format(app.dateTime, 'HH:mm', { locale: fr })} - {format(getSlotEndTime(app.dateTime, app.durationMinutes), 'HH:mm', { locale: fr })}
                   </CardTitle>
                   <CardDescription>{format(app.dateTime, 'PPPP', { locale: fr })}</CardDescription>
+                  {app.doctorName && <CardDescription className="text-sm font-medium text-primary pt-1">Avec: {app.doctorName}</CardDescription>}
                 </CardHeader>
                 <CardContent className="flex items-center flex-grow py-2">
                   <CheckCircle2 className="mr-2 h-5 w-5 text-accent" />
@@ -311,7 +494,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
         </section>
       )}
       
-      {isLoggedIn && bookedSlots.length === 0 && (
+      {isLoggedIn && patientBookedSlots.length === 0 && (
          <Card className="p-8 text-center mt-10 bg-muted/30 rounded-lg">
             <Info className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
             <p className="text-lg text-muted-foreground">Vous n'avez aucun rendez-vous programmé pour le moment.</p>
@@ -335,7 +518,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                 {dialogAction === 'book' ? 'Confirmation de réservation' : "Confirmation d'annulation"}
               </AlertDialogTitle>
               <AlertDialogDescription className="text-base">
-                Voulez-vous vraiment {dialogAction === 'book' ? 'réserver' : 'annuler'} ce créneau pour le <br />
+                Voulez-vous vraiment {dialogAction === 'book' ? `réserver ce créneau avec ${selectedAppointment.doctorName || 'le médecin sélectionné'}` : 'annuler ce créneau'} pour le <br />
                 <span className="font-semibold text-foreground">{format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })}</span>?
               </AlertDialogDescription>
             </AlertDialogHeader>
@@ -357,3 +540,5 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
     </div>
   );
 }
+
+    

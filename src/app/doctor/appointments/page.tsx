@@ -16,28 +16,54 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 
-// Simulated appointments data for THIS doctor
-const initialAppointmentsData = [
-  { id: 'docApp1', dateTime: '2024-07-28T09:00:00', patientName: 'Laura Durand', status: 'Confirmé' },
-  { id: 'docApp2', dateTime: '2024-07-29T14:00:00', patientName: 'Sophie Petit', status: 'Annulé par patient' },
-  { id: 'docApp3', dateTime: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString(), patientName: 'Jean Dupont', status: 'Confirmé' }, // Tomorrow
-  { id: 'docApp4', dateTime: new Date().toISOString(), patientName: 'Claude Monet', status: 'Confirmé' }, // Today
+// --- Simulated "current logged-in doctor" ---
+// In a real app, this would come from an auth context
+const CURRENT_DOCTOR_ID = 'doc1'; // e.g., Dr. Alice Martin
+const CURRENT_DOCTOR_NAME = 'Dr. Alice Martin';
+// ---
+
+// Simulated appointments data for ALL doctors (this would ideally be fetched or from global state)
+// Make sure this structure is consistent with `allBookedAppointments` in AppointmentScheduler
+interface GlobalAppointment {
+  id: string;
+  dateTime: string; // ISO string
+  patientName: string; 
+  status: string; // 'Confirmé', 'Annulé par patient', 'En attente'
+  doctorId?: string;
+  doctorName?: string; 
+}
+
+const allClinicAppointments: GlobalAppointment[] = [
+  // Appointments for Dr. Alice Martin (doc1)
+  { id: 'globApp1', dateTime: '2024-07-28T09:00:00', patientName: 'Laura Durand', status: 'Confirmé', doctorId: 'doc1', doctorName: 'Dr. Alice Martin' },
+  { id: 'globApp2', dateTime: new Date().toISOString(), patientName: 'Claude Monet', status: 'Confirmé', doctorId: 'doc1', doctorName: 'Dr. Alice Martin' }, // Today for Dr. Martin
+
+  // Appointments for Dr. Bernard Dubois (doc2)
+  { id: 'globApp3', dateTime: '2024-07-28T10:00:00', patientName: 'Paul Lefevre', status: 'Confirmé', doctorId: 'doc2', doctorName: 'Dr. Bernard Dubois' },
+  { id: 'globApp4', dateTime: new Date(new Date().setDate(new Date().getDate() + 1)).toISOString(), patientName: 'Jean Dupont', status: 'En attente', doctorId: 'doc2', doctorName: 'Dr. Bernard Dubois' }, // Tomorrow for Dr. Dubois
+  
+  // Appointments for Dr. Chloé Lambert (doc3)
+  { id: 'globApp5', dateTime: '2024-07-29T14:00:00', patientName: 'Sophie Petit', status: 'Annulé par patient', doctorId: 'doc3', doctorName: 'Dr. Chloé Lambert' },
 ];
 
-interface DoctorAppointment {
-  id: string;
-  dateTime: string;
-  patientName: string;
-  status: string;
-}
 
 export default function DoctorAppointmentsPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); // Assume doctor is logged in
+  const [isLoggedIn, setIsLoggedIn] = useState(true); 
   
-  const [appointments, setAppointments] = useState<DoctorAppointment[]>(initialAppointmentsData);
+  // State for appointments specific to THIS doctor
+  const [doctorAppointments, setDoctorAppointments] = useState<GlobalAppointment[]>([]);
   const [filterDate, setFilterDate] = useState('');
+
+  useEffect(() => {
+    // Filter global appointments to get only those for the current doctor
+    const appointmentsForThisDoctor = allClinicAppointments.filter(
+      app => app.doctorId === CURRENT_DOCTOR_ID
+    );
+    setDoctorAppointments(appointmentsForThisDoctor);
+  }, []);
+
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -45,13 +71,13 @@ export default function DoctorAppointmentsPage() {
   };
 
   const filteredAppointments = useMemo(() => {
-    return appointments.filter(app => {
+    return doctorAppointments.filter(app => {
       const appointmentDate = startOfDay(parseISO(app.dateTime));
       const inputDate = filterDate ? startOfDay(parseISO(filterDate)) : null;
       const dateMatch = !inputDate || isEqual(appointmentDate, inputDate);
       return dateMatch;
     }).sort((a, b) => parseISO(a.dateTime).getTime() - parseISO(b.dateTime).getTime());
-  }, [filterDate, appointments]);
+  }, [filterDate, doctorAppointments]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -80,7 +106,7 @@ export default function DoctorAppointmentsPage() {
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="mb-8">
           <h2 className="text-3xl font-headline font-bold text-primary flex items-center">
-            <CalendarClock className="mr-3 h-8 w-8" /> Mes Rendez-vous
+            <CalendarClock className="mr-3 h-8 w-8" /> Mes Rendez-vous ({CURRENT_DOCTOR_NAME})
           </h2>
           <p className="text-muted-foreground">Consultez votre planning de consultations.</p>
         </div>
@@ -139,3 +165,5 @@ export default function DoctorAppointmentsPage() {
     </div>
   );
 }
+
+    
