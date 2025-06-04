@@ -11,14 +11,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
 import { useState, useMemo, useEffect } from 'react';
-import { CalendarClock, Users, BriefcaseMedical, Filter, ArrowLeft, BadgeCheck, BadgeX, BadgeHelp, Edit, Ban } from 'lucide-react';
+import { CalendarClock, Filter, ArrowLeft, BadgeCheck, BadgeX, BadgeHelp, Edit, Ban, Loader2, BriefcaseMedical } from 'lucide-react';
 import { format, parseISO, startOfDay, isEqual } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { listDoctors } from '@/ai/flows/doctorManagementFlow';
+import type { Doctor } from '@/ai/flows/doctorManagementFlow';
 
-// Simulated appointments data (initial state)
+// Simulated appointments data (initial state) - Les noms des médecins ici sont statiques
 const initialAppointmentsData = [
   { id: 'app1', dateTime: '2024-07-28T09:00:00', patientName: 'Laura Durand', doctorName: 'Dr. Alice Martin', status: 'Confirmé' },
   { id: 'app2', dateTime: '2024-07-28T10:30:00', patientName: 'Paul Lefevre', doctorName: 'Dr. Bernard Dubois', status: 'Confirmé' },
@@ -28,7 +30,7 @@ const initialAppointmentsData = [
   { id: 'app6', dateTime: new Date().toISOString(), patientName: 'Claude Monet', doctorName: 'Dr. Alice Martin', status: 'Confirmé' }, // Today's appointment
 ];
 
-const doctorsList = ['Tous les médecins', 'Dr. Alice Martin', 'Dr. Bernard Dubois', 'Dr. Chloé Lambert'];
+// const doctorsList = ['Tous les médecins', 'Dr. Alice Martin', 'Dr. Bernard Dubois', 'Dr. Chloé Lambert']; // Remplacé par une liste dynamique
 const statusList = ['Tous les statuts', 'Confirmé', 'Annulé', 'En attente'];
 
 interface Appointment {
@@ -48,6 +50,29 @@ export default function ViewAppointmentsPage() {
   const [filterDate, setFilterDate] = useState('');
   const [filterDoctor, setFilterDoctor] = useState('Tous les médecins');
   const [filterStatus, setFilterStatus] = useState('Tous les statuts');
+
+  const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
+  const [isLoadingDoctors, setIsLoadingDoctors] = useState(true);
+
+  useEffect(() => {
+    const fetchClinicDoctors = async () => {
+      setIsLoadingDoctors(true);
+      try {
+        const fetchedDoctors = await listDoctors();
+        setAllDoctors(fetchedDoctors);
+      } catch (error) {
+        console.error("Failed to fetch doctors for filter:", error);
+        toast({ title: "Erreur", description: "Impossible de charger la liste des médecins pour le filtre.", variant: "destructive" });
+      } finally {
+        setIsLoadingDoctors(false);
+      }
+    };
+    fetchClinicDoctors();
+  }, [toast]);
+
+  const doctorsListForFilter = useMemo(() => {
+    return ['Tous les médecins', ...allDoctors.map(doc => doc.fullName)];
+  }, [allDoctors]);
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -101,11 +126,10 @@ export default function ViewAppointmentsPage() {
     }
   };
 
-  // Set filterDate to today by default to show today's appointments
   useEffect(() => {
     const today = new Date();
     const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0'); // Months are 0-indexed
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
     const dd = String(today.getDate()).padStart(2, '0');
     setFilterDate(`${yyyy}-${mm}-${dd}`);
   }, []);
@@ -137,14 +161,21 @@ export default function ViewAppointmentsPage() {
               </div>
               <div>
                 <Label htmlFor="filterDoctor">Médecin</Label>
-                <Select value={filterDoctor} onValueChange={setFilterDoctor}>
-                  <SelectTrigger id="filterDoctor">
-                    <SelectValue placeholder="Choisir un médecin" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {doctorsList.map(doc => <SelectItem key={doc} value={doc}>{doc}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                {isLoadingDoctors ? (
+                  <div className="flex items-center space-x-2 mt-2">
+                    <Loader2 className="h-5 w-5 animate-spin" /> 
+                    <span>Chargement...</span>
+                  </div>
+                ) : (
+                  <Select value={filterDoctor} onValueChange={setFilterDoctor}>
+                    <SelectTrigger id="filterDoctor">
+                      <SelectValue placeholder="Choisir un médecin" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {doctorsListForFilter.map(docName => <SelectItem key={docName} value={docName}>{docName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
               <div>
                 <Label htmlFor="filterStatus">Statut</Label>
@@ -228,4 +259,3 @@ export default function ViewAppointmentsPage() {
     </div>
   );
 }
-
