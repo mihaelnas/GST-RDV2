@@ -22,14 +22,15 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
-} from "@/components/ui/dialog"; // DialogTrigger removed as it's handled by button onClick
+  DialogFooter, // Correction: Ajout de DialogFooter
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter,
+  AlertDialogFooter as AlertDialogFooterComponent, // Renommé pour éviter conflit si AlertDialogFooter était utilisé directement
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
@@ -344,10 +345,10 @@ export default function DoctorsListPage() {
               Êtes-vous sûr de vouloir supprimer le Dr. {doctorToDelete?.fullName} ? Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooterComponent>
             <AlertDialogCancel onClick={() => setDoctorToDelete(null)}>Annuler</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeleteDoctor} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
-          </AlertDialogFooter>
+          </AlertDialogFooterComponent>
         </AlertDialogContent>
       </AlertDialog>
 
