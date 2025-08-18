@@ -3,40 +3,62 @@
  * This file encapsulates the logic for interacting with the patient data source.
  */
 
-import { patientsDB, type PatientInternal } from '@/lib/data/mockDatabase';
+import pool from '@/lib/db';
 import type { Patient, PatientCreateInput, PatientUpdateInput } from '@/ai/flows/patientManagementFlow';
+import bcrypt from 'bcryptjs';
 
 /**
- * Retrieves all patients from the data source.
- * Excludes sensitive information like password hashes.
+ * Retrieves all patients from the database.
  * @returns {Promise<Patient[]>} A promise that resolves to an array of patients.
  */
 export async function getAllPatients(): Promise<Patient[]> {
-  // DB call simulation
-  return patientsDB.map(({ passwordHash, ...patient }) => ({
-      ...patient,
-      dob: new Date(patient.dob) // Ensure dob is a Date object
-  }));
+  try {
+    const result = await pool.query('SELECT id, full_name, email, dob FROM patients ORDER BY full_name ASC');
+    return result.rows.map(row => ({
+      id: row.id,
+      fullName: row.full_name,
+      email: row.email,
+      dob: new Date(row.dob),
+    }));
+  } catch (error) {
+    console.error('Database Error in getAllPatients:', error);
+    throw new Error('Failed to fetch patients.');
+  }
 }
 
 /**
- * Creates a new patient in the data source.
+ * Creates a new patient in the database.
  * @param {PatientCreateInput} data - The data for the new patient.
  * @returns {Promise<Patient>} A promise that resolves to the newly created patient.
  */
 export async function createPatient(data: PatientCreateInput): Promise<Patient> {
-  const newPatientInternal: PatientInternal = {
-    id: `pat${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    fullName: data.fullName,
-    email: data.email,
-    dob: data.dob,
-    passwordHash: `sim_hashed_${data.password}`, // Simulate hashing
+  const salt = await bcrypt.genSalt(10);
+  const passwordHash = await bcrypt.hash(data.password, salt);
+  const dobFormatted = data.dob.toISOString().split('T')[0]; // Format to 'YYYY-MM-DD' for SQL DATE type
+
+  const query = {
+    text: `INSERT INTO patients(full_name, email, dob, password_hash)
+           VALUES($1, $2, $3, $4)
+           RETURNING id, full_name, email, dob`,
+    values: [data.fullName, data.email, dobFormatted, passwordHash],
   };
 
-  patientsDB.push(newPatientInternal);
-
-  const { passwordHash, ...patientData } = newPatientInternal;
-  return patientData;
+  try {
+    const result = await pool.query(query);
+    const row = result.rows[0];
+    return {
+      id: row.id,
+      fullName: row.full_name,
+      email: row.email,
+      dob: new Date(row.dob),
+    };
+  } catch (error) {
+    console.error('Database Error in createPatient:', error);
+    if ((error as any).code === '23505') {
+      throw new Error('A patient with this email already exists.');
+    }
+    throw new Error('Failed to create patient.');
+  }
 }
 
 /**
@@ -47,18 +69,35 @@ export async function createPatient(data: PatientCreateInput): Promise<Patient> 
  * @throws {Error} If the patient is not found.
  */
 export async function updatePatientById(id: string, data: PatientUpdateInput): Promise<Patient> {
-  const patientIndex = patientsDB.findIndex(pat => pat.id === id);
-  if (patientIndex === -1) {
-    throw new Error('Patient not found with id: ' + id);
-  }
+    const dobFormatted = data.dob ? data.dob.toISOString().split('T')[0] : null;
 
-  patientsDB[patientIndex] = {
-    ...patientsDB[patientIndex],
-    ...data
-  };
+    const query = {
+        text: `UPDATE patients
+               SET full_name = $1, email = $2, dob = $3, updated_at = NOW()
+               WHERE id = $4
+               RETURNING id, full_name, email, dob`,
+        values: [data.fullName, data.email, dobFormatted, id],
+    };
 
-  const { passwordHash, ...updatedPatientData } = patientsDB[patientIndex];
-  return updatedPatientData;
+    try {
+        const result = await pool.query(query);
+        if (result.rowCount === 0) {
+            throw new Error('Patient not found with id: ' + id);
+        }
+        const row = result.rows[0];
+        return {
+          id: row.id,
+          fullName: row.full_name,
+          email: row.email,
+          dob: new Date(row.dob),
+        };
+    } catch (error) {
+        console.error('Database Error in updatePatientById:', error);
+        if ((error as any).code === '23505') {
+            throw new Error('A patient with this email already exists.');
+        }
+        throw new Error('Failed to update patient.');
+    }
 }
 
 /**
@@ -67,14 +106,17 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
  * @returns {Promise<boolean>} A promise that resolves to true if deletion was successful, false otherwise.
  */
 export async function deletePatientById(id: string): Promise<boolean> {
-  const initialLength = patientsDB.length;
-  const newPatientsDB = patientsDB.filter(pat => pat.id !== id);
-  const wasDeleted = newPatientsDB.length < initialLength;
-  if(wasDeleted) {
-     patientsDB.length = 0;
-     Array.prototype.push.apply(patientsDB, newPatientsDB);
+  const query = {
+    text: 'DELETE FROM patients WHERE id = $1',
+    values: [id],
+  };
+  try {
+    const result = await pool.query(query);
+    return result.rowCount > 0;
+  } catch (error) {
+    console.error('Database Error in deletePatientById:', error);
+    throw new Error('Failed to delete patient.');
   }
-  return wasDeleted;
 }
 
 /**
@@ -83,8 +125,24 @@ export async function deletePatientById(id: string): Promise<boolean> {
  * @returns {Promise<Patient | null>} A promise that resolves to the patient or null if not found.
  */
 export async function getPatientById(id: string): Promise<Patient | null> {
-    const patient = patientsDB.find(pat => pat.id === id);
-    if (!patient) return null;
-    const { passwordHash, ...patientData } = patient;
-    return patientData;
+    const query = {
+        text: 'SELECT id, full_name, email, dob FROM patients WHERE id = $1',
+        values: [id],
+    };
+    try {
+        const result = await pool.query(query);
+        if (result.rowCount === 0) {
+            return null;
+        }
+        const row = result.rows[0];
+        return {
+          id: row.id,
+          fullName: row.full_name,
+          email: row.email,
+          dob: new Date(row.dob),
+        };
+    } catch (error) {
+        console.error('Database Error in getPatientById:', error);
+        throw new Error('Failed to fetch patient.');
+    }
 }
