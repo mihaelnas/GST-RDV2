@@ -104,12 +104,16 @@ const deleteAppointmentFlow = ai.defineFlow(
     {
         name: 'deleteAppointmentFlow',
         inputSchema: z.string(), // appointmentId
-        outputSchema: z.boolean(),
+        outputSchema: z.object({ success: z.boolean(), message: z.string().optional() }),
     },
     async (appointmentId) => {
-        return AppointmentService.deleteAppointmentById(appointmentId);
+        const success = await AppointmentService.deleteAppointmentById(appointmentId);
+        if (success) {
+            return { success: true, message: 'Appointment deleted successfully.' };
+        }
+        return { success: false, message: 'Appointment not found or already deleted.' };
     }
 );
-export async function deleteAppointment(appointmentId: string): Promise<boolean> {
+export async function deleteAppointment(appointmentId: string): Promise<{ success: boolean, message?: string }> {
     return deleteAppointmentFlow(appointmentId);
 }

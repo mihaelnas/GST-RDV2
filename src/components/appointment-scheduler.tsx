@@ -116,9 +116,9 @@ const generateAppointmentsForDate = (
 };
 
 const SIMULATED_LOGGED_IN_PATIENT = {
-  id: '3a5c1e8f-7b6d-4a9c-8e2f-1a3b5d7c9e0a', // A valid UUID for a test patient in your DB
-  name: 'Patient Connecté',
-  email: 'patient.connecte@example.com',
+  id: '3a5c1e8f-7b6d-4a9c-8e2f-1a3b5d7c9e0a', // Jean Dupont's ID from schema.sql
+  name: 'Jean Dupont',
+  email: 'jean.dupont@example.com',
 };
 
 export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedulerProps) {
@@ -253,9 +253,13 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
 
     } else if (dialogAction === 'cancel') {
         try {
-            await deleteAppointment(selectedAppointment.id);
-            setAnimationType('cancelled');
-            toast({ title: "Rendez-vous Annulé", description: `Le rendez-vous a été annulé.`, variant: "destructive" });
+            const result = await deleteAppointment(selectedAppointment.id);
+            if (result.success) {
+                setAnimationType('cancelled');
+                toast({ title: "Rendez-vous Annulé", description: `Le rendez-vous a été annulé.`, variant: "destructive" });
+            } else {
+                throw new Error(result.message || "Failed to cancel appointment");
+            }
         } catch (error) {
             console.error("Failed to cancel appointment:", error);
             toast({ title: "Erreur", description: "Impossible d'annuler le rendez-vous.", variant: "destructive" });
@@ -290,7 +294,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                 {isLoadingDoctors ? <Loader2 className="h-6 w-6 animate-spin"/> :
                 <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
                     <SelectTrigger className="w-full sm:w-[320px] text-base py-3 shadow-sm"><SelectValue placeholder="Choisir un médecin" /></SelectTrigger>
-                    <SelectContent>{allDoctors.map(doc => <SelectItem key={doc.id} value={doc.id}>{doc.name} - {doc.specialty}</SelectItem>)}</SelectContent>
+                    <SelectContent>{allDoctors.map(doc => <SelectItem key={doc.id} value={doc.id}>{doc.fullName} - {doc.specialty}</SelectItem>)}</SelectContent>
                 </Select>}
             </div>
 
@@ -330,7 +334,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                         </CardFooter>
                     </Card>))}
                 </div>)
-                : <div className="p-6 text-center col-span-full bg-muted/50 rounded-md"><Info className="mx-auto h-10 w-10 text-muted-foreground mb-3" /><p className="text-md text-muted-foreground">Aucun créneau disponible pour {selectedDoctor?.name} le {format(selectedDate, "eeee d MMMM yyyy", { locale: fr })}.</p></div>}
+                : <div className="p-6 text-center col-span-full bg-muted/50 rounded-md"><Info className="mx-auto h-10 w-10 text-muted-foreground mb-3" /><p className="text-md text-muted-foreground">Aucun créneau disponible pour {selectedDoctor?.fullName} le {format(selectedDate, "eeee d MMMM yyyy", { locale: fr })}.</p></div>}
                  {!isLoggedIn && <div className="mt-6 p-4 text-sm text-center bg-yellow-100 border border-yellow-300 text-yellow-700 rounded-md flex items-center justify-center"><MailWarning className="mr-2 h-5 w-5" />Connectez-vous pour activer les notifications par e-mail.</div>}
             </div>
         </CardContent>

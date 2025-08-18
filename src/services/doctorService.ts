@@ -1,3 +1,4 @@
+
 /**
  * @fileOverview Service layer for doctor-related business logic.
  * This file encapsulates the logic for interacting with the doctor data source.
@@ -126,21 +127,42 @@ export async function updateDoctorById(id: string, data: DoctorUpdateInput): Pro
 
 
 /**
- * Deletes a doctor by their ID.
+ * Deletes a doctor by their ID, after checking for future appointments.
  * @param {string} id - The ID of the doctor to delete.
- * @returns {Promise<boolean>} A promise that resolves to true if deletion was successful, false otherwise.
+ * @returns {Promise<boolean>} A promise that resolves to true if deletion was successful.
  */
 export async function deleteDoctorById(id: string): Promise<boolean> {
-  const query = {
-    text: 'DELETE FROM doctors WHERE id = $1',
-    values: [id],
-  };
+  const client = await pool.connect();
   try {
-    const result = await pool.query(query);
-    return result.rowCount > 0;
+    await client.query('BEGIN');
+
+    // Check for future appointments
+    const appointmentCheck = await client.query(
+        'SELECT 1 FROM appointments WHERE doctor_id = $1 AND date_time >= NOW() LIMIT 1',
+        [id]
+    );
+
+    if (appointmentCheck.rowCount > 0) {
+        throw new Error('Cannot delete doctor with future appointments. Please reassign or cancel them first.');
+    }
+
+    // Proceed with deletion if no future appointments
+    const deleteResult = await client.query('DELETE FROM doctors WHERE id = $1', [id]);
+    
+    await client.query('COMMIT');
+    
+    return deleteResult.rowCount > 0;
+
   } catch (error) {
+    await client.query('ROLLBACK');
     console.error('Database Error in deleteDoctorById:', error);
+    // Re-throw custom error messages or a generic one
+    if (error instanceof Error && error.message.includes('Cannot delete doctor')) {
+        throw error;
+    }
     throw new Error('Failed to delete doctor.');
+  } finally {
+    client.release();
   }
 }
 

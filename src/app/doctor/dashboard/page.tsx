@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { BarChart, CalendarDays, FileText, Settings, Users, CalendarPlus, CalendarX, ArrowLeft } from 'lucide-react';
+import { BarChart, CalendarDays, FileText, Settings, Users, CalendarPlus, ArrowLeft } from 'lucide-react';
 
 export default function DoctorDashboardPage() {
   const router = useRouter();
@@ -41,20 +41,21 @@ export default function DoctorDashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg hover:shadow-xl transition-shadow">
+          <Card className="shadow-lg hover:shadow-xl transition-shadow opacity-50 cursor-not-allowed">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-medium">Gérer mes Disponibilités</CardTitle>
               <CalendarPlus className="h-6 w-6 text-primary" />
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground mb-2">Ajoutez ou supprimez vos créneaux de consultation.</p>
-              <Button className="w-full" asChild>
-                <Link href="/doctor/availability">
-                    <CalendarPlus className="mr-2 h-4 w-4"/>
-                    Gérer les disponibilités
-                </Link>
+              <p className="text-sm text-muted-foreground mb-2">Fonctionnalité en cours de développement.</p>
+              <Button className="w-full" disabled>
+                  <CalendarPlus className="mr-2 h-4 w-4"/>
+                  Gérer les disponibilités
               </Button>
             </CardContent>
+             <CardFooter>
+                <p className="text-xs text-muted-foreground">Cette section permettra de définir vos horaires de travail et vos absences.</p>
+            </CardFooter>
           </Card>
 
           <Card className="shadow-lg hover:shadow-xl transition-shadow">
