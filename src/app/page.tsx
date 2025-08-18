@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import AppointmentScheduler from '@/components/appointment-scheduler';
-import Header from '@/components/header'; // Import du nouveau Header
+import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -15,9 +15,10 @@ export default function HomePage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (searchParams.get('loggedIn') === 'true') {
+    // Cette logique de connexion via query param est conservée pour la simplicité de la démo
+    // mais sera remplacée par un vrai système d'authentification.
+    if (searchParams.get('loggedIn') === 'true' || searchParams.get('fromDashboard') === 'true') {
       setIsLoggedIn(true);
-      // Nettoyer l'URL en supprimant le paramètre query
       const newPath = window.location.pathname;
       router.replace(newPath, { scroll: false });
     }
@@ -61,7 +62,7 @@ export default function HomePage() {
             <ul className="list-disc list-inside text-muted-foreground space-y-2 mb-4">
               <li>Consultez les horaires en temps réel.</li>
               <li>Choisissez le spécialiste adapté à vos besoins.</li>
-              <li>Recevez des confirmations et rappels.</li>
+              <li>Recevez des confirmations et rappels par e-mail.</li>
             </ul>
             {isLoggedIn && <p className="text-accent font-semibold">Vous êtes connecté. Vous pouvez prendre rendez-vous ci-dessous.</p>}
             {!isLoggedIn && <p className="text-destructive font-semibold">Veuillez vous connecter ou créer un compte pour prendre un rendez-vous.</p>}

@@ -15,7 +15,7 @@ import {
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar as CalendarIcon, Clock, CalendarDays, CheckCircle2, Info, CalendarCheck, CalendarX, UserCheck, User, MailWarning, Loader2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, CalendarDays, CheckCircle2, Info, CalendarCheck, CalendarX, User, MailWarning, Loader2 } from 'lucide-react';
 import { format, isPast, startOfDay, isEqual, set, getDay, parseISO, parse } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +26,7 @@ import { useRouter } from 'next/navigation';
 import { sendPatientConfirmationEmail, sendDoctorAppointmentNotificationEmail } from '@/ai/flows/notificationFlow';
 import type { AppointmentNotificationInput } from '@/ai/flows/notificationFlow';
 import { listDoctors, type Doctor } from '@/ai/flows/doctorManagementFlow';
-import { listAppointmentsByDoctor, createAppointment, deleteAppointment, type BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
+import { listAppointmentsByDoctor, createAppointment, deleteAppointment, BookedAppointment, listAppointmentsByPatient } from '@/ai/flows/appointmentManagementFlow';
 
 interface AppointmentSlot {
   id: string;
@@ -115,6 +115,7 @@ const generateAppointmentsForDate = (
   return appointments.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 };
 
+// This would come from an auth context in a real app
 const SIMULATED_LOGGED_IN_PATIENT = {
   id: '3a5c1e8f-7b6d-4a9c-8e2f-1a3b5d7c9e0a', // Jean Dupont's ID from schema.sql
   name: 'Jean Dupont',
@@ -124,7 +125,7 @@ const SIMULATED_LOGGED_IN_PATIENT = {
 export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedulerProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [availableSlots, setAvailableSlots] = useState<AppointmentSlot[]>([]);
-  const [bookedAppointments, setBookedAppointments] = useState<BookedAppointment[]>([]);
+  const [allBookedAppointments, setAllBookedAppointments] = useState<BookedAppointment[]>([]);
   
   const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(true);
@@ -132,7 +133,6 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
   const selectedDoctor = useMemo(() => allDoctors.find(doc => doc.id === selectedDoctorId), [selectedDoctorId, allDoctors]);
 
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
-  const [isLoadingMyBookings, setIsLoadingMyBookings] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
 
   const [selectedAppointment, setSelectedAppointment] = useState<AppointmentSlot | BookedAppointment | null>(null);
@@ -161,19 +161,17 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
       }
   }, [toast]);
 
-  const fetchBookedAppointments = useCallback(async () => {
+  const fetchBookedAppointmentsForDoctor = useCallback(async () => {
     if (!selectedDoctorId) return;
     setIsLoadingSlots(true);
-    setIsLoadingMyBookings(true);
     try {
       const bookings = await listAppointmentsByDoctor(selectedDoctorId);
-      setBookedAppointments(bookings);
+      setAllBookedAppointments(bookings);
     } catch (error) {
         console.error("Failed to fetch booked appointments:", error);
         toast({ title: "Erreur", description: "Impossible de charger les rendez-vous existants.", variant: "destructive" });
     } finally {
         setIsLoadingSlots(false);
-        setIsLoadingMyBookings(false);
     }
   }, [selectedDoctorId, toast]);
 
@@ -183,36 +181,29 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
 
   useEffect(() => {
     if (selectedDoctorId) {
-        fetchBookedAppointments();
+        fetchBookedAppointmentsForDoctor();
     }
-  }, [selectedDoctorId, fetchBookedAppointments]);
+  }, [selectedDoctorId, fetchBookedAppointmentsForDoctor]);
 
   useEffect(() => {
     if (selectedDoctor) {
-        const generatedSlots = generateAppointmentsForDate(selectedDate, bookedAppointments, selectedDoctor);
+        const generatedSlots = generateAppointmentsForDate(selectedDate, allBookedAppointments, selectedDoctor);
         setAvailableSlots(generatedSlots);
     } else {
         setAvailableSlots([]);
     }
-  }, [selectedDate, bookedAppointments, selectedDoctor]);
+  }, [selectedDate, allBookedAppointments, selectedDoctor]);
 
-  const myBookedSlots = useMemo(() =>
-    bookedAppointments.filter(app => isLoggedIn && app.patientId === SIMULATED_LOGGED_IN_PATIENT.id)
-    .sort((a,b) => parseISO(a.dateTime).getTime() - parseISO(b.dateTime).getTime()),
-    [bookedAppointments, isLoggedIn]
-  );
 
-  const handleOpenDialog = (appointment: AppointmentSlot | BookedAppointment, action: 'book' | 'cancel') => {
-    if (action === 'book') {
-      if (!isLoggedIn) {
+  const handleOpenDialog = (appointment: AppointmentSlot, action: 'book') => {
+    if (!isLoggedIn) {
         toast({ title: "Authentification requise", description: "Veuillez vous connecter pour réserver.", variant: "destructive" });
         router.push('/login');
         return;
-      }
-      if (!selectedDoctorId) {
+    }
+    if (!selectedDoctorId) {
         toast({ title: "Médecin non sélectionné", description: "Veuillez sélectionner un médecin.", variant: "destructive" });
         return;
-      }
     }
     setSelectedAppointment(appointment);
     setDialogAction(action);
@@ -220,13 +211,12 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
   };
 
   const handleConfirmDialog = async () => {
-    if (!selectedAppointment || !dialogAction) return;
+    if (!selectedAppointment || dialogAction !== 'book' || !('durationMinutes' in selectedAppointment)) return;
     
     setIsConfirming(true);
     setAnimateId(selectedAppointment.id);
 
-    if (dialogAction === 'book' && 'durationMinutes' in selectedAppointment) { // It's an AppointmentSlot
-      if (!isLoggedIn || !selectedDoctor) { router.push('/login'); setShowDialog(false); return; }
+    if (!isLoggedIn || !selectedDoctor) { router.push('/login'); setShowDialog(false); return; }
       
       try {
         const newAppointment = await createAppointment({
@@ -236,11 +226,11 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
         });
         
         setAnimationType('booked');
-        toast({ title: "Rendez-vous Confirmé!", description: `Rendez-vous avec ${selectedDoctor.name} le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} confirmé.`, className: "bg-accent text-accent-foreground" });
+        toast({ title: "Rendez-vous Confirmé!", description: `Rendez-vous avec ${selectedDoctor.fullName} le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} confirmé.`, className: "bg-accent text-accent-foreground" });
         
         const notificationInput: AppointmentNotificationInput = {
           patientName: SIMULATED_LOGGED_IN_PATIENT.name, patientEmail: SIMULATED_LOGGED_IN_PATIENT.email,
-          doctorName: selectedDoctor.name, doctorEmail: selectedDoctor.email,
+          doctorName: selectedDoctor.fullName, doctorEmail: selectedDoctor.email,
           appointmentDateTime: selectedAppointment.dateTime, appointmentId: newAppointment.id,
         };
         await sendPatientConfirmationEmail(notificationInput);
@@ -251,22 +241,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
         toast({ title: "Erreur", description: "Impossible de réserver le rendez-vous.", variant: "destructive" });
       }
 
-    } else if (dialogAction === 'cancel') {
-        try {
-            const result = await deleteAppointment(selectedAppointment.id);
-            if (result.success) {
-                setAnimationType('cancelled');
-                toast({ title: "Rendez-vous Annulé", description: `Le rendez-vous a été annulé.`, variant: "destructive" });
-            } else {
-                throw new Error(result.message || "Failed to cancel appointment");
-            }
-        } catch (error) {
-            console.error("Failed to cancel appointment:", error);
-            toast({ title: "Erreur", description: "Impossible d'annuler le rendez-vous.", variant: "destructive" });
-        }
-    }
-
-    fetchBookedAppointments(); // Refresh data from DB
+    fetchBookedAppointmentsForDoctor(); // Refresh data from DB
     setIsConfirming(false);
     
     setTimeout(() => { setAnimateId(null); setAnimationType(null); }, 600);
@@ -339,27 +314,6 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
             </div>
         </CardContent>
       </Card>
-
-      {isLoggedIn && (
-      <section className="mt-12">
-          <div className="flex items-center gap-3 mb-6"><UserCheck className="h-8 w-8 text-primary" /><h2 className="text-3xl font-headline font-semibold">Mes rendez-vous Confirmés</h2></div>
-          {isLoadingMyBookings ? <div className="p-6 text-center col-span-full"><Loader2 className="h-8 w-8 animate-spin text-primary"/></div>
-          : myBookedSlots.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-            {myBookedSlots.map(app => (
-              <Card key={app.id} className={cn("shadow-lg border-l-4 border-primary bg-card flex flex-col", animateId === app.id && animationType === 'cancelled' ? "animate-out fade-out-50 duration-500" : "animate-in fade-in-0 duration-500")}>
-                <CardHeader className="flex-grow pb-3">
-                  <CardTitle className="flex items-center text-xl"><Clock className="mr-2 h-5 w-5 text-muted-foreground" />{format(parseISO(app.dateTime), 'HH:mm', { locale: fr })} - {format(new Date(parseISO(app.dateTime).getTime() + 30 * 60000), 'HH:mm', { locale: fr })}</CardTitle>
-                  <CardDescription>{format(parseISO(app.dateTime), 'PPPP', { locale: fr })}</CardDescription>
-                  {app.doctorName && <CardDescription className="text-sm font-medium text-primary pt-1">Avec: {app.doctorName}</CardDescription>}
-                </CardHeader>
-                <CardContent className="flex items-center flex-grow py-2"><CheckCircle2 className="mr-2 h-5 w-5 text-accent" /><p className="text-sm font-semibold text-accent">Confirmé</p></CardContent>
-                <CardFooter className="p-4"><Button variant="destructive" className="w-full" onClick={() => handleOpenDialog(app, 'cancel')}><CalendarX className="mr-2 h-4 w-4" />Annuler</Button></CardFooter>
-              </Card>
-            ))}
-          </div>
-          ) : <Card className="p-8 text-center mt-10 bg-muted/30 rounded-lg"><Info className="mx-auto h-12 w-12 text-muted-foreground mb-4" /><p className="text-lg text-muted-foreground">Vous n'avez aucun rendez-vous programmé.</p></Card>}
-      </section>)}
       
       {!isLoggedIn && <Card className="p-8 text-center mt-10 bg-muted/30 rounded-lg"><Info className="mx-auto h-12 w-12 text-muted-foreground mb-4" /><p className="text-lg text-muted-foreground">Connectez-vous pour voir vos rendez-vous.</p></Card>}
 
@@ -370,7 +324,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
               <AlertDialogTitle className="font-headline text-xl">{dialogAction === 'book' ? 'Confirmation de réservation' : "Confirmation d'annulation"}</AlertDialogTitle>
               <AlertDialogDescription className="text-base">
                 Voulez-vous vraiment {dialogAction === 'book' ? `réserver ce créneau` : 'annuler ce créneau'} pour le <br />
-                <span className="font-semibold text-foreground">{format(dialogAction === 'book' ? selectedAppointment.dateTime : parseISO(selectedAppointment.dateTime), "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })}</span>?
+                <span className="font-semibold text-foreground">{format('dateTime' in selectedAppointment ? selectedAppointment.dateTime : parseISO(selectedAppointment.dateTime), "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })}</span>?
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="mt-4">

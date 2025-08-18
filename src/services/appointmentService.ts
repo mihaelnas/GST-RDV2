@@ -1,3 +1,4 @@
+
 /**
  * @fileOverview Service layer for appointment-related business logic.
  */
@@ -49,7 +50,7 @@ export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]>
  */
 export async function getAppointmentsByDoctorId(doctorId: string): Promise<BookedAppointment[]> {
     const query = {
-        text: `SELECT a.id, a.date_time, a.patient_id, p.full_name as patient_name, d.full_name as doctor_name, a.status 
+        text: `SELECT a.id, a.date_time, a.patient_id, p.full_name as patient_name, a.doctor_id, d.full_name as doctor_name, a.status
                FROM appointments a
                JOIN doctors d on a.doctor_id = d.id
                JOIN patients p on a.patient_id = p.id
@@ -62,14 +63,47 @@ export async function getAppointmentsByDoctorId(doctorId: string): Promise<Booke
         return result.rows.map(row => ({
             id: row.id,
             dateTime: row.date_time.toISOString(),
-            patientId: row.patient_id, // Keeping for potential internal use
-            patientName: row.patient_name, // Now we have the name!
+            patientId: row.patient_id,
+            patientName: row.patient_name,
+            doctorId: row.doctor_id,
             doctorName: row.doctor_name,
             status: row.status,
         }));
     } catch (error) {
         console.error('Database Error in getAppointmentsByDoctorId:', error);
         throw new Error('Failed to fetch appointments for doctor.');
+    }
+}
+
+/**
+ * Retrieves all appointments for a given patient.
+ * @param {string} patientId - The ID of the patient.
+ * @returns {Promise<BookedAppointment[]>}
+ */
+export async function getAppointmentsByPatientId(patientId: string): Promise<BookedAppointment[]> {
+    const query = {
+        text: `SELECT a.id, a.date_time, a.patient_id, p.full_name as patient_name, a.doctor_id, d.full_name as doctor_name, a.status 
+               FROM appointments a
+               JOIN doctors d on a.doctor_id = d.id
+               JOIN patients p on a.patient_id = p.id
+               WHERE a.patient_id = $1
+               ORDER BY a.date_time DESC`,
+        values: [patientId],
+    };
+    try {
+        const result = await pool.query(query);
+        return result.rows.map(row => ({
+            id: row.id,
+            dateTime: row.date_time.toISOString(),
+            patientId: row.patient_id,
+            patientName: row.patient_name,
+            doctorId: row.doctor_id,
+            doctorName: row.doctor_name,
+            status: row.status,
+        }));
+    } catch (error) {
+        console.error('Database Error in getAppointmentsByPatientId:', error);
+        throw new Error('Failed to fetch appointments for patient.');
     }
 }
 

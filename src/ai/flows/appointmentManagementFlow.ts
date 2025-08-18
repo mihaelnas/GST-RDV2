@@ -26,6 +26,7 @@ const BookedAppointmentSchema = z.object({
     dateTime: z.string(), // ISO date string
     patientId: z.string(),
     patientName: z.string(),
+    doctorId: z.string(),
     doctorName: z.string(),
     status: z.string(),
 });
@@ -68,6 +69,22 @@ const listAppointmentsByDoctorFlow = ai.defineFlow(
 export async function listAppointmentsByDoctor(doctorId: string): Promise<BookedAppointment[]> {
     return listAppointmentsByDoctorFlow(doctorId);
 }
+
+// List appointments for a specific patient
+const listAppointmentsByPatientFlow = ai.defineFlow(
+  {
+    name: 'listAppointmentsByPatientFlow',
+    inputSchema: z.string(), // patientId
+    outputSchema: z.array(BookedAppointmentSchema),
+  },
+  async (patientId) => {
+    return AppointmentService.getAppointmentsByPatientId(patientId);
+  }
+);
+export async function listAppointmentsByPatient(patientId: string): Promise<BookedAppointment[]> {
+    return listAppointmentsByPatientFlow(patientId);
+}
+
 
 // Create a new appointment
 const createAppointmentFlow = ai.defineFlow(

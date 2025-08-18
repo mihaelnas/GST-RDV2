@@ -44,8 +44,8 @@ export default function LoginPage() {
       alert("Connexion simulée réussie en tant que Personnel de la clinique ! Vous allez être redirigé vers votre tableau de bord.");
       router.push('/clinic-staff/dashboard');
     } else {
-      alert("Connexion simulée réussie en tant que Patient ! Vous allez être redirigé.");
-      router.push('/?loggedIn=true'); // Comportement par défaut pour les patients
+      alert("Connexion simulée réussie en tant que Patient ! Vous allez être redirigé vers votre tableau de bord.");
+      router.push('/patient/dashboard'); // Redirection vers le tableau de bord patient
     }
   };
 
