@@ -38,6 +38,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
+  AlertDialogFooter,
 } from '@/components/ui/alert-dialog';
 
 import { listPatients, addPatient, updatePatient, deletePatient } from '@/ai/flows/patientManagementFlow';
