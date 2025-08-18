@@ -10,49 +10,44 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
-import { useState, useMemo, useEffect } from 'react';
-import { CalendarClock, Filter, ArrowLeft, BadgeCheck, BadgeX, BadgeHelp, Edit, Ban, Loader2, BriefcaseMedical } from 'lucide-react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { CalendarClock, Filter, ArrowLeft, BadgeCheck, BadgeX, BadgeHelp, Edit, Ban, Loader2 } from 'lucide-react';
 import { format, parseISO, startOfDay, isEqual } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { listDoctors } from '@/ai/flows/doctorManagementFlow';
-import type { Doctor } from '@/ai/flows/doctorManagementFlow';
+import { listDoctors, type Doctor } from '@/ai/flows/doctorManagementFlow';
+import { listAppointments, updateAppointmentStatus, type AppointmentDetails } from '@/ai/flows/appointmentManagementFlow';
 
-// Simulated appointments data (initial state) - Les noms des médecins ici sont statiques
-const initialAppointmentsData = [
-  { id: 'app1', dateTime: '2024-07-28T09:00:00', patientName: 'Laura Durand', doctorName: 'Dr. Alice Martin', status: 'Confirmé' },
-  { id: 'app2', dateTime: '2024-07-28T10:30:00', patientName: 'Paul Lefevre', doctorName: 'Dr. Bernard Dubois', status: 'Confirmé' },
-  { id: 'app3', dateTime: '2024-07-29T14:00:00', patientName: 'Sophie Petit', doctorName: 'Dr. Alice Martin', status: 'Annulé' },
-  { id: 'app4', dateTime: '2024-07-29T15:00:00', patientName: 'Marc Voisin', doctorName: 'Dr. Chloé Lambert', status: 'En attente' },
-  { id: 'app5', dateTime: '2024-07-30T11:00:00', patientName: 'Jeanne Moreau', doctorName: 'Dr. Bernard Dubois', status: 'Confirmé' },
-  { id: 'app6', dateTime: new Date().toISOString(), patientName: 'Claude Monet', doctorName: 'Dr. Alice Martin', status: 'Confirmé' }, // Today's appointment
-];
-
-// const doctorsList = ['Tous les médecins', 'Dr. Alice Martin', 'Dr. Bernard Dubois', 'Dr. Chloé Lambert']; // Remplacé par une liste dynamique
 const statusList = ['Tous les statuts', 'Confirmé', 'Annulé', 'En attente'];
-
-interface Appointment {
-  id: string;
-  dateTime: string;
-  patientName: string;
-  doctorName: string;
-  status: string;
-}
 
 export default function ViewAppointmentsPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); // Assume staff is logged in
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
   
-  const [appointments, setAppointments] = useState<Appointment[]>(initialAppointmentsData);
+  const [appointments, setAppointments] = useState<AppointmentDetails[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
+  const [isLoadingDoctors, setIsLoadingDoctors] = useState(true);
+
   const [filterDate, setFilterDate] = useState('');
   const [filterDoctor, setFilterDoctor] = useState('Tous les médecins');
   const [filterStatus, setFilterStatus] = useState('Tous les statuts');
 
-  const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
-  const [isLoadingDoctors, setIsLoadingDoctors] = useState(true);
+  const fetchAppointments = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const fetchedAppointments = await listAppointments();
+      setAppointments(fetchedAppointments);
+    } catch (error) {
+      console.error("Failed to fetch appointments:", error);
+      toast({ title: "Erreur", description: "Impossible de charger la liste des rendez-vous.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
 
   useEffect(() => {
     const fetchClinicDoctors = async () => {
@@ -62,13 +57,14 @@ export default function ViewAppointmentsPage() {
         setAllDoctors(fetchedDoctors);
       } catch (error) {
         console.error("Failed to fetch doctors for filter:", error);
-        toast({ title: "Erreur", description: "Impossible de charger la liste des médecins pour le filtre.", variant: "destructive" });
+        toast({ title: "Erreur", description: "Impossible de charger la liste des médecins.", variant: "destructive" });
       } finally {
         setIsLoadingDoctors(false);
       }
     };
     fetchClinicDoctors();
-  }, [toast]);
+    fetchAppointments();
+  }, [toast, fetchAppointments]);
 
   const doctorsListForFilter = useMemo(() => {
     return ['Tous les médecins', ...allDoctors.map(doc => doc.fullName)];
@@ -97,20 +93,21 @@ export default function ViewAppointmentsPage() {
       title: "Fonctionnalité non implémentée",
       description: `La modification du rendez-vous ${appointmentId} n'est pas encore disponible.`,
     });
-    // router.push(`/clinic-staff/appointments/${appointmentId}/edit`); // Future implementation
   };
 
-  const handleCancelAppointment = (appointmentId: string) => {
-    setAppointments(prevAppointments =>
-      prevAppointments.map(app =>
-        app.id === appointmentId ? { ...app, status: 'Annulé' } : app
-      )
-    );
-    toast({
-      title: "Rendez-vous annulé",
-      description: `Le rendez-vous ${appointmentId} a été marqué comme annulé.`,
-      variant: "destructive",
-    });
+  const handleCancelAppointment = async (appointmentId: string) => {
+    try {
+      await updateAppointmentStatus(appointmentId, 'Annulé');
+      toast({
+        title: "Rendez-vous annulé",
+        description: `Le rendez-vous a été marqué comme annulé.`,
+        variant: "destructive",
+      });
+      fetchAppointments(); // Refresh the list
+    } catch (error) {
+        console.error("Failed to cancel appointment:", error);
+        toast({ title: "Erreur", description: "Impossible d'annuler le rendez-vous.", variant: "destructive" });
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -133,7 +130,6 @@ export default function ViewAppointmentsPage() {
     const dd = String(today.getDate()).padStart(2, '0');
     setFilterDate(`${yyyy}-${mm}-${dd}`);
   }, []);
-
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -182,7 +178,7 @@ export default function ViewAppointmentsPage() {
                  <Select value={filterStatus} onValueChange={setFilterStatus}>
                   <SelectTrigger id="filterStatus">
                     <SelectValue placeholder="Choisir un statut" />
-                  </SelectTrigger>
+                  </Trigger>
                   <SelectContent>
                     {statusList.map(stat => <SelectItem key={stat} value={stat}>{stat}</SelectItem>)}
                   </SelectContent>
@@ -191,7 +187,12 @@ export default function ViewAppointmentsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {filteredAppointments.length > 0 ? (
+            {isLoading ? (
+                <div className="flex justify-center items-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="ml-2 text-muted-foreground">Chargement des rendez-vous...</p>
+                </div>
+            ) : filteredAppointments.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -213,7 +214,7 @@ export default function ViewAppointmentsPage() {
                       <Button variant="outline" size="sm" onClick={() => handleEditAppointment(app.id)} title="Modifier le rendez-vous">
                         <Edit className="h-4 w-4" />
                       </Button>
-                      {(app.status === 'Confirmé' || app.status === 'En attente') && (
+                      {app.status !== 'Annulé' && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm" title="Annuler le rendez-vous">

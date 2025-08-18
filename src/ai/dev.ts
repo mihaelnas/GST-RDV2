@@ -3,3 +3,4 @@
 import './flows/doctorManagementFlow';
 import './flows/patientManagementFlow';
 import './flows/notificationFlow';
+import './flows/appointmentManagementFlow';

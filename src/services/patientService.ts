@@ -63,13 +63,13 @@ export async function createPatient(data: PatientCreateInput): Promise<Patient> 
 
 /**
  * Updates an existing patient by their ID.
+ * This function now dynamically builds the query to only update provided fields.
  * @param {string} id - The ID of the patient to update.
  * @param {PatientUpdateInput} data - The data to update.
  * @returns {Promise<Patient>} A promise that resolves to the updated patient.
  * @throws {Error} If the patient is not found.
  */
 export async function updatePatientById(id: string, data: PatientUpdateInput): Promise<Patient> {
-    // Check which fields are provided and build the query dynamically
     const fields: string[] = [];
     const values: any[] = [];
     let queryIndex = 1;
@@ -88,13 +88,12 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
     }
 
     if (fields.length === 0) {
-        // If no fields to update, just return the current patient data
         const currentPatient = await getPatientById(id);
         if (!currentPatient) throw new Error('Patient not found with id: ' + id);
         return currentPatient;
     }
 
-    values.push(id); // Add the id for the WHERE clause
+    values.push(id);
 
     const query = {
         text: `UPDATE patients

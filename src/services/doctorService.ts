@@ -5,7 +5,7 @@
 
 import pool from '@/lib/db';
 import type { Doctor, DoctorCreateInput, DoctorUpdateInput } from '@/ai/flows/doctorManagementFlow';
-import bcrypt from 'bcryptjs'; // We'll need a password hashing library
+import bcrypt from 'bcryptjs';
 
 /**
  * Retrieves all doctors from the database.
@@ -13,9 +13,7 @@ import bcrypt from 'bcryptjs'; // We'll need a password hashing library
  */
 export async function getAllDoctors(): Promise<Doctor[]> {
   try {
-    // Exclude password_hash from the SELECT statement for security
     const result = await pool.query('SELECT id, full_name, specialty, email FROM doctors ORDER BY full_name ASC');
-    // The pg driver returns snake_case, so we map to camelCase for our application objects.
     return result.rows.map(row => ({
       id: row.id,
       fullName: row.full_name,
@@ -34,7 +32,6 @@ export async function getAllDoctors(): Promise<Doctor[]> {
  * @returns {Promise<Doctor>} A promise that resolves to the newly created doctor.
  */
 export async function createDoctor(data: DoctorCreateInput): Promise<Doctor> {
-  // Hash the password before storing it
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash(data.password, salt);
 
@@ -56,9 +53,8 @@ export async function createDoctor(data: DoctorCreateInput): Promise<Doctor> {
     };
   } catch (error) {
     console.error('Database Error in createDoctor:', error);
-    // Check for unique constraint violation (e.g., email already exists)
     if ((error as any).code === '23505') {
-        throw new Error('A doctor with this email already exists.');
+      throw new Error('A doctor with this email already exists.');
     }
     throw new Error('Failed to create doctor.');
   }
@@ -66,40 +62,68 @@ export async function createDoctor(data: DoctorCreateInput): Promise<Doctor> {
 
 /**
  * Updates an existing doctor by their ID.
+ * This function now dynamically builds the query to only update provided fields.
  * @param {string} id - The ID of the doctor to update.
  * @param {DoctorUpdateInput} data - The data to update.
  * @returns {Promise<Doctor>} A promise that resolves to the updated doctor.
- * @throws {Error} If the doctor is not found.
+ * @throws {Error} If the doctor is not found or no data is provided.
  */
 export async function updateDoctorById(id: string, data: DoctorUpdateInput): Promise<Doctor> {
-  const query = {
-    text: `UPDATE doctors
-           SET full_name = $1, specialty = $2, email = $3, updated_at = NOW()
-           WHERE id = $4
-           RETURNING id, full_name, specialty, email`,
-    values: [data.fullName, data.specialty, data.email, id],
-  };
+    const fields: string[] = [];
+    const values: any[] = [];
+    let queryIndex = 1;
 
-  try {
-    const result = await pool.query(query);
-    if (result.rowCount === 0) {
-      throw new Error('Doctor not found with id: ' + id);
+    if (data.fullName) {
+        fields.push(`full_name = $${queryIndex++}`);
+        values.push(data.fullName);
     }
-    const row = result.rows[0];
-    return {
-      id: row.id,
-      fullName: row.full_name,
-      specialty: row.specialty,
-      email: row.email,
+    if (data.specialty) {
+        fields.push(`specialty = $${queryIndex++}`);
+        values.push(data.specialty);
+    }
+    if (data.email) {
+        fields.push(`email = $${queryIndex++}`);
+        values.push(data.email);
+    }
+    
+    if (fields.length === 0) {
+        // If no fields to update, fetch and return the current doctor data
+        const currentDoctor = await getDoctorById(id);
+        if (!currentDoctor) throw new Error('Doctor not found with id: ' + id);
+        return currentDoctor;
+    }
+
+    values.push(id); // Add the id for the WHERE clause
+
+    const query = {
+        text: `UPDATE doctors
+               SET ${fields.join(', ')}, updated_at = NOW()
+               WHERE id = $${queryIndex}
+               RETURNING id, full_name, specialty, email`,
+        values: values,
     };
-  } catch (error) {
-    console.error('Database Error in updateDoctorById:', error);
-    if ((error as any).code === '23505') {
-        throw new Error('A doctor with this email already exists.');
+
+    try {
+        const result = await pool.query(query);
+        if (result.rowCount === 0) {
+            throw new Error('Doctor not found with id: ' + id);
+        }
+        const row = result.rows[0];
+        return {
+            id: row.id,
+            fullName: row.full_name,
+            specialty: row.specialty,
+            email: row.email,
+        };
+    } catch (error) {
+        console.error('Database Error in updateDoctorById:', error);
+        if ((error as any).code === '23505') {
+            throw new Error('A doctor with this email already exists.');
+        }
+        throw new Error('Failed to update doctor.');
     }
-    throw new Error('Failed to update doctor.');
-  }
 }
+
 
 /**
  * Deletes a doctor by their ID.
