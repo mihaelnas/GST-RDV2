@@ -72,6 +72,8 @@ export default function DoctorAppointmentsPage() {
         return <Badge variant="destructive"><BadgeX className="mr-1 h-4 w-4" />Annulé</Badge>;
       case 'En attente':
         return <Badge variant="secondary" className="bg-yellow-400 hover:bg-yellow-500 text-yellow-900"><BadgeHelp className="mr-1 h-4 w-4" />En attente</Badge>;
+      case 'Payée':
+        return <Badge variant="default" className="bg-blue-500 hover:bg-blue-600 text-white"><BadgeCheck className="mr-1 h-4 w-4" />Payée</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -129,7 +131,7 @@ export default function DoctorAppointmentsPage() {
                 {filteredAppointments.map((app) => (
                   <TableRow key={app.id}>
                     <TableCell className="font-medium">{format(parseISO(app.dateTime), "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })}</TableCell>
-                    <TableCell>{app.patientId}</TableCell> {/* Note: We only have patientId here, need join for name */}
+                    <TableCell>{app.patientName}</TableCell>
                     <TableCell>{getStatusBadge(app.status)}</TableCell>
                   </TableRow>
                 ))}

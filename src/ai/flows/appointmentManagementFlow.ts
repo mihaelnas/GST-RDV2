@@ -25,6 +25,7 @@ const BookedAppointmentSchema = z.object({
     id: z.string(),
     dateTime: z.string(), // ISO date string
     patientId: z.string(),
+    patientName: z.string(),
     doctorName: z.string(),
     status: z.string(),
 });

@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { CalendarClock, Filter, ArrowLeft, BadgeCheck, BadgeX, BadgeHelp, Edit, Ban, Loader2 } from 'lucide-react';
+import { CalendarClock, Filter, ArrowLeft, BadgeCheck, BadgeX, BadgeHelp, Edit, Ban, Loader2, CheckSquare } from 'lucide-react';
 import { format, parseISO, startOfDay, isEqual } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
@@ -20,7 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import { listDoctors, type Doctor } from '@/ai/flows/doctorManagementFlow';
 import { listAppointments, updateAppointmentStatus, type AppointmentDetails } from '@/ai/flows/appointmentManagementFlow';
 
-const statusList = ['Tous les statuts', 'Confirmé', 'Annulé', 'En attente'];
+const statusList = ['Tous les statuts', 'Confirmé', 'Annulé', 'En attente', 'Payée'];
 
 export default function ViewAppointmentsPage() {
   const router = useRouter();
@@ -95,18 +95,23 @@ export default function ViewAppointmentsPage() {
     });
   };
 
-  const handleCancelAppointment = async (appointmentId: string) => {
+  const handleStatusUpdate = async (appointmentId: string, newStatus: 'Annulé' | 'Confirmé') => {
     try {
-      await updateAppointmentStatus(appointmentId, 'Annulé');
-      toast({
-        title: "Rendez-vous annulé",
-        description: `Le rendez-vous a été marqué comme annulé.`,
-        variant: "destructive",
-      });
-      fetchAppointments(); // Refresh the list
+      const success = await updateAppointmentStatus(appointmentId, newStatus);
+      if (success) {
+        toast({
+          title: `Rendez-vous ${newStatus}`,
+          description: `Le rendez-vous a été marqué comme ${newStatus.toLowerCase()}.`,
+          variant: newStatus === 'Annulé' ? "destructive" : "default",
+          className: newStatus === 'Confirmé' ? "bg-accent text-accent-foreground" : "",
+        });
+        fetchAppointments(); // Refresh the list
+      } else {
+        throw new Error("Update status failed silently.");
+      }
     } catch (error) {
-        console.error("Failed to cancel appointment:", error);
-        toast({ title: "Erreur", description: "Impossible d'annuler le rendez-vous.", variant: "destructive" });
+        console.error(`Failed to update status for appointment ${appointmentId}:`, error);
+        toast({ title: "Erreur", description: `Impossible de changer le statut du rendez-vous.`, variant: "destructive" });
     }
   };
 
@@ -118,6 +123,8 @@ export default function ViewAppointmentsPage() {
         return <Badge variant="destructive"><BadgeX className="mr-1 h-4 w-4" />Annulé</Badge>;
       case 'En attente':
         return <Badge variant="secondary" className="bg-yellow-400 hover:bg-yellow-500 text-yellow-900"><BadgeHelp className="mr-1 h-4 w-4" />En attente</Badge>;
+      case 'Payée':
+        return <Badge variant="default" className="bg-blue-500 hover:bg-blue-600 text-white"><BadgeCheck className="mr-1 h-4 w-4" />Payée</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -211,9 +218,11 @@ export default function ViewAppointmentsPage() {
                     <TableCell>{app.doctorName}</TableCell>
                     <TableCell>{getStatusBadge(app.status)}</TableCell>
                     <TableCell className="text-right space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => handleEditAppointment(app.id)} title="Modifier le rendez-vous">
-                        <Edit className="h-4 w-4" />
-                      </Button>
+                       {app.status === 'En attente' && (
+                        <Button variant="outline" size="sm" onClick={() => handleStatusUpdate(app.id, 'Confirmé')} title="Confirmer le rendez-vous" className="border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700">
+                          <CheckSquare className="h-4 w-4" />
+                        </Button>
+                      )}
                       {app.status !== 'Annulé' && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
@@ -230,7 +239,7 @@ export default function ViewAppointmentsPage() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Non</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleCancelAppointment(app.id)}>Oui, annuler</AlertDialogAction>
+                              <AlertDialogAction onClick={() => handleStatusUpdate(app.id, 'Annulé')}>Oui, annuler</AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>

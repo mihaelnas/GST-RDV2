@@ -43,16 +43,17 @@ export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]>
 }
 
 /**
- * Retrieves all appointments for a given doctor.
+ * Retrieves all appointments for a given doctor with patient names.
  * @param {string} doctorId - The ID of the doctor.
  * @returns {Promise<BookedAppointment[]>}
  */
 export async function getAppointmentsByDoctorId(doctorId: string): Promise<BookedAppointment[]> {
     const query = {
-        text: `SELECT a.id, a.date_time, a.patient_id, d.full_name as doctor_name, a.status 
+        text: `SELECT a.id, a.date_time, a.patient_id, p.full_name as patient_name, d.full_name as doctor_name, a.status 
                FROM appointments a
                JOIN doctors d on a.doctor_id = d.id
-               WHERE a.doctor_id = $1 AND a.status = 'Confirmé'
+               JOIN patients p on a.patient_id = p.id
+               WHERE a.doctor_id = $1
                ORDER BY a.date_time ASC`,
         values: [doctorId],
     };
@@ -61,7 +62,8 @@ export async function getAppointmentsByDoctorId(doctorId: string): Promise<Booke
         return result.rows.map(row => ({
             id: row.id,
             dateTime: row.date_time.toISOString(),
-            patientId: row.patient_id,
+            patientId: row.patient_id, // Keeping for potential internal use
+            patientName: row.patient_name, // Now we have the name!
             doctorName: row.doctor_name,
             status: row.status,
         }));
