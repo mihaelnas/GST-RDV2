@@ -1,7 +1,6 @@
-
 'use server';
 /**
- * @fileOverview Manages CRUD operations for doctors.
+ * @fileOverview Manages CRUD operations for doctors, acting as the API layer.
  *
  * - listDoctors - Retrieves a list of all doctors.
  * - addDoctor - Adds a new doctor.
@@ -14,6 +13,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import * as DoctorService from '@/services/doctorService'; // Import the service layer
 
 // Schema for Doctor data returned by flows (password excluded)
 const DoctorSchema = z.object({
@@ -41,19 +41,8 @@ const DoctorUpdateInputSchema = z.object({
 });
 export type DoctorUpdateInput = z.infer<typeof DoctorUpdateInputSchema>;
 
-// Internal representation, might include sensitive data like password hash
-interface DoctorInternal extends Doctor {
-  passwordHash?: string; // Simulate password storage
-}
 
-// In-memory store to simulate a database
-let doctorsDB: DoctorInternal[] = [
-  { id: 'doc1', fullName: 'Dr. Alice Martin', specialty: 'Cardiologie', email: 'alice.martin@example.com', passwordHash: 'hashed_password1_simulated' },
-  { id: 'doc2', fullName: 'Dr. Bernard Dubois', specialty: 'Pédiatrie', email: 'bernard.dubois@example.com', passwordHash: 'hashed_password2_simulated' },
-  { id: 'doc3', fullName: 'Dr. Chloé Lambert', specialty: 'Dermatologie', email: 'chloe.lambert@example.com', passwordHash: 'hashed_password3_simulated' },
-];
-
-// --- Flows ---
+// --- Flows (Controller Layer) ---
 
 const listDoctorsFlowInternal = ai.defineFlow(
   {
@@ -61,8 +50,8 @@ const listDoctorsFlowInternal = ai.defineFlow(
     outputSchema: z.array(DoctorSchema),
   },
   async () => {
-    // Exclude passwordHash when returning the list
-    return doctorsDB.map(({ passwordHash, ...doctor }) => doctor);
+    // Call the service to get the data
+    return DoctorService.getAllDoctors();
   }
 );
 export async function listDoctors(): Promise<Doctor[]> {
@@ -76,16 +65,8 @@ const addDoctorFlowInternal = ai.defineFlow(
     outputSchema: DoctorSchema,
   },
   async (input) => {
-    const newDoctorInternal: DoctorInternal = {
-      id: `doc${Date.now()}_${Math.random().toString(36).substring(2, 7)}`, // More unique ID
-      fullName: input.fullName,
-      specialty: input.specialty,
-      email: input.email,
-      passwordHash: `sim_hashed_${input.password}`, // Simulate hashing
-    };
-    doctorsDB.push(newDoctorInternal);
-    const { passwordHash, ...doctorData } = newDoctorInternal;
-    return doctorData;
+    // Call the service to create the doctor
+    return DoctorService.createDoctor(input);
   }
 );
 export async function addDoctor(input: DoctorCreateInput): Promise<Doctor> {
@@ -94,7 +75,7 @@ export async function addDoctor(input: DoctorCreateInput): Promise<Doctor> {
 
 const UpdateDoctorFlowInputSchema = z.object({
     id: z.string(),
-    data: DoctorUpdateInputSchema, // Use the schema that excludes password
+    data: DoctorUpdateInputSchema,
 });
 const updateDoctorFlowInternal = ai.defineFlow(
   {
@@ -103,17 +84,8 @@ const updateDoctorFlowInternal = ai.defineFlow(
     outputSchema: DoctorSchema,
   },
   async ({ id, data }) => {
-    const doctorIndex = doctorsDB.findIndex(doc => doc.id === id);
-    if (doctorIndex === -1) {
-      throw new Error('Doctor not found with id: ' + id);
-    }
-    // Merge existing data with new data, ensuring passwordHash is preserved if not explicitly changed
-    doctorsDB[doctorIndex] = { 
-        ...doctorsDB[doctorIndex], 
-        ...data 
-    };
-    const { passwordHash, ...updatedDoctorData } = doctorsDB[doctorIndex];
-    return updatedDoctorData;
+    // Call the service to update the doctor
+    return DoctorService.updateDoctorById(id, data);
   }
 );
 export async function updateDoctor(id: string, data: DoctorUpdateInput): Promise<Doctor> {
@@ -128,9 +100,9 @@ const deleteDoctorFlowInternal = ai.defineFlow(
     outputSchema: z.object({ success: z.boolean(), message: z.string().optional() }),
   },
   async ({ id }) => {
-    const initialLength = doctorsDB.length;
-    doctorsDB = doctorsDB.filter(doc => doc.id !== id);
-    if (doctorsDB.length < initialLength) {
+    // Call the service to delete the doctor
+    const success = await DoctorService.deleteDoctorById(id);
+    if (success) {
       return { success: true, message: 'Doctor deleted successfully.' };
     }
     return { success: false, message: 'Doctor not found or already deleted.' };

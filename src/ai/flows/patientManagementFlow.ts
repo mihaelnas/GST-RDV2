@@ -1,7 +1,6 @@
-
 'use server';
 /**
- * @fileOverview Manages CRUD operations for patients.
+ * @fileOverview Manages CRUD operations for patients, acting as the API layer.
  *
  * - listPatients - Retrieves a list of all patients.
  * - addPatient - Adds a new patient.
@@ -14,6 +13,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import * as PatientService from '@/services/patientService'; // Import the service layer
 
 // Schema for Patient data returned by flows (password excluded)
 const PatientSchema = z.object({
@@ -41,19 +41,8 @@ const PatientUpdateInputSchema = z.object({
 });
 export type PatientUpdateInput = z.infer<typeof PatientUpdateInputSchema>;
 
-// Internal representation, might include sensitive data like password hash
-interface PatientInternal extends Patient {
-  passwordHash?: string; // Simulate password storage
-}
 
-// In-memory store to simulate a database
-let patientsDB: PatientInternal[] = [
-  { id: 'pat1', fullName: 'Laura Durand', email: 'laura.durand@example.com', dob: new Date(1990, 5, 15), passwordHash: 'hashed_password_pat1' },
-  { id: 'pat2', fullName: 'Paul Lefevre', email: 'paul.lefevre@example.com', dob: new Date(1985, 8, 22), passwordHash: 'hashed_password_pat2' },
-  { id: 'pat3', fullName: 'Sophie Petit', email: 'sophie.petit@example.com', dob: new Date(2001, 1, 10), passwordHash: 'hashed_password_pat3' },
-];
-
-// --- Flows ---
+// --- Flows (Controller Layer) ---
 
 const listPatientsFlowInternal = ai.defineFlow(
   {
@@ -61,8 +50,8 @@ const listPatientsFlowInternal = ai.defineFlow(
     outputSchema: z.array(PatientSchema),
   },
   async () => {
-    // Exclude passwordHash when returning the list
-    return patientsDB.map(({ passwordHash, ...patient }) => patient);
+    // Call the service to get the data
+    return PatientService.getAllPatients();
   }
 );
 export async function listPatients(): Promise<Patient[]> {
@@ -76,16 +65,8 @@ const addPatientFlowInternal = ai.defineFlow(
     outputSchema: PatientSchema,
   },
   async (input) => {
-    const newPatientInternal: PatientInternal = {
-      id: `pat${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-      fullName: input.fullName,
-      email: input.email,
-      dob: input.dob,
-      passwordHash: `sim_hashed_${input.password}`, // Simulate hashing
-    };
-    patientsDB.push(newPatientInternal);
-    const { passwordHash, ...patientData } = newPatientInternal;
-    return patientData;
+    // Call the service to create the patient
+    return PatientService.createPatient(input);
   }
 );
 export async function addPatient(input: PatientCreateInput): Promise<Patient> {
@@ -103,16 +84,8 @@ const updatePatientFlowInternal = ai.defineFlow(
     outputSchema: PatientSchema,
   },
   async ({ id, data }) => {
-    const patientIndex = patientsDB.findIndex(pat => pat.id === id);
-    if (patientIndex === -1) {
-      throw new Error('Patient not found with id: ' + id);
-    }
-    patientsDB[patientIndex] = {
-        ...patientsDB[patientIndex],
-        ...data
-    };
-    const { passwordHash, ...updatedPatientData } = patientsDB[patientIndex];
-    return updatedPatientData;
+    // Call the service to update the patient
+    return PatientService.updatePatientById(id, data);
   }
 );
 export async function updatePatient(id: string, data: PatientUpdateInput): Promise<Patient> {
@@ -127,9 +100,9 @@ const deletePatientFlowInternal = ai.defineFlow(
     outputSchema: z.object({ success: z.boolean(), message: z.string().optional() }),
   },
   async ({ id }) => {
-    const initialLength = patientsDB.length;
-    patientsDB = patientsDB.filter(pat => pat.id !== id);
-    if (patientsDB.length < initialLength) {
+    // Call the service to delete the patient
+    const success = await PatientService.deletePatientById(id);
+    if (success) {
       return { success: true, message: 'Patient deleted successfully.' };
     }
     return { success: false, message: 'Patient not found or already deleted.' };
@@ -147,10 +120,8 @@ const getPatientByIdFlowInternal = ai.defineFlow(
     outputSchema: PatientSchema.nullable(),
   },
   async ({ id }) => {
-    const patient = patientsDB.find(pat => pat.id === id);
-    if (!patient) return null;
-    const { passwordHash, ...patientData } = patient;
-    return patientData;
+    // Call the service to get the patient
+    return PatientService.getPatientById(id);
   }
 );
 export async function getPatientById(id: string): Promise<Patient | null> {
