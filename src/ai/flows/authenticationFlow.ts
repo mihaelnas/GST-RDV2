@@ -3,24 +3,8 @@
  * @fileOverview Manages user authentication.
  */
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
 import * as AuthService from '@/services/authService';
-
-// Schema for login input
-export const LoginInputSchema = z.object({
-  email: z.string().email(),
-  password: z.string(),
-});
-export type LoginInput = z.infer<typeof LoginInputSchema>;
-
-// Schema for the object returned on successful login
-export const LoginOutputSchema = z.object({
-  id: z.string(),
-  fullName: z.string(),
-  email: z.string().email(),
-  role: z.enum(['doctor', 'patient', 'clinic_staff']),
-});
-export type LoginOutput = z.infer<typeof LoginOutputSchema>;
+import { LoginInputSchema, LoginOutputSchema, type LoginInput, type LoginOutput } from '@/ai/schemas/authSchemas';
 
 // --- Flow ---
 const loginFlow = ai.defineFlow(
