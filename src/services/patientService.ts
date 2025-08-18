@@ -69,14 +69,39 @@ export async function createPatient(data: PatientCreateInput): Promise<Patient> 
  * @throws {Error} If the patient is not found.
  */
 export async function updatePatientById(id: string, data: PatientUpdateInput): Promise<Patient> {
-    const dobFormatted = data.dob ? data.dob.toISOString().split('T')[0] : null;
+    // Check which fields are provided and build the query dynamically
+    const fields: string[] = [];
+    const values: any[] = [];
+    let queryIndex = 1;
+
+    if (data.fullName) {
+        fields.push(`full_name = $${queryIndex++}`);
+        values.push(data.fullName);
+    }
+    if (data.email) {
+        fields.push(`email = $${queryIndex++}`);
+        values.push(data.email);
+    }
+    if (data.dob) {
+        fields.push(`dob = $${queryIndex++}`);
+        values.push(data.dob.toISOString().split('T')[0]);
+    }
+
+    if (fields.length === 0) {
+        // If no fields to update, just return the current patient data
+        const currentPatient = await getPatientById(id);
+        if (!currentPatient) throw new Error('Patient not found with id: ' + id);
+        return currentPatient;
+    }
+
+    values.push(id); // Add the id for the WHERE clause
 
     const query = {
         text: `UPDATE patients
-               SET full_name = $1, email = $2, dob = $3, updated_at = NOW()
-               WHERE id = $4
+               SET ${fields.join(', ')}, updated_at = NOW()
+               WHERE id = $${queryIndex}
                RETURNING id, full_name, email, dob`,
-        values: [data.fullName, data.email, dobFormatted, id],
+        values: values,
     };
 
     try {
@@ -99,6 +124,7 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
         throw new Error('Failed to update patient.');
     }
 }
+
 
 /**
  * Deletes a patient by their ID.
