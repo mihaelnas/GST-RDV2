@@ -178,7 +178,7 @@ export default function ViewAppointmentsPage() {
                  <Select value={filterStatus} onValueChange={setFilterStatus}>
                   <SelectTrigger id="filterStatus">
                     <SelectValue placeholder="Choisir un statut" />
-                  </Trigger>
+                  </SelectTrigger>
                   <SelectContent>
                     {statusList.map(stat => <SelectItem key={stat} value={stat}>{stat}</SelectItem>)}
                   </SelectContent>
@@ -244,15 +244,14 @@ export default function ViewAppointmentsPage() {
                 <p className="text-muted-foreground text-center py-6">Aucun rendez-vous trouvé correspondant à vos filtres.</p>
             )}
           </CardContent>
+           <CardFooter className="mt-8 border-t pt-6">
+            <Button variant="outline" asChild>
+              <Link href="/clinic-staff/dashboard">
+                <ArrowLeft className="mr-2 h-4 w-4" /> Retour au Tableau de Bord
+              </Link>
+            </Button>
+          </CardFooter>
         </Card>
-        
-        <CardFooter className="mt-8 border-t pt-6">
-          <Button variant="outline" asChild>
-            <Link href="/clinic-staff/dashboard">
-              <ArrowLeft className="mr-2 h-4 w-4" /> Retour au Tableau de Bord
-            </Link>
-          </Button>
-        </CardFooter>
       </main>
       <footer className="py-8 text-center text-muted-foreground border-t mt-12">
         <p>&copy; {new Date().getFullYear()} Clinique Rendez-Vous. Tous droits réservés.</p>
