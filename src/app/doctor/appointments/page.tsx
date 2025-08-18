@@ -17,11 +17,10 @@ import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { listAppointmentsByDoctor, BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
 
-// --- Simulated "current logged-in doctor" ---
-// In a real app, this would come from an auth context
+// In a real app, this would come from an auth context after login.
 const CURRENT_DOCTOR_ID = 'a1b2c3d4-e5f6-7890-1234-567890abcdef'; // Dr. Alice Martin's ID from schema.sql
 const CURRENT_DOCTOR_NAME = 'Dr. Alice Martin';
-// ---
+
 
 export default function DoctorAppointmentsPage() {
   const router = useRouter();

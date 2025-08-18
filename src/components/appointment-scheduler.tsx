@@ -15,7 +15,7 @@ import {
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Calendar as CalendarIcon, Clock, CalendarDays, CheckCircle2, Info, CalendarCheck, CalendarX, User, MailWarning, Loader2 } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, CalendarDays, Info, CalendarCheck, User, MailWarning, Loader2 } from 'lucide-react';
 import { format, isPast, startOfDay, isEqual, set, getDay, parseISO, parse } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { useToast } from "@/hooks/use-toast";
@@ -26,7 +26,7 @@ import { useRouter } from 'next/navigation';
 import { sendPatientConfirmationEmail, sendDoctorAppointmentNotificationEmail } from '@/ai/flows/notificationFlow';
 import type { AppointmentNotificationInput } from '@/ai/flows/notificationFlow';
 import { listDoctors, type Doctor } from '@/ai/flows/doctorManagementFlow';
-import { listAppointmentsByDoctor, createAppointment, deleteAppointment, BookedAppointment, listAppointmentsByPatient } from '@/ai/flows/appointmentManagementFlow';
+import { listAppointmentsByDoctor, createAppointment, type BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
 
 interface AppointmentSlot {
   id: string;
@@ -41,8 +41,7 @@ interface AppointmentSchedulerProps {
   isLoggedIn: boolean;
 }
 
-// NOTE: The weeklySchedule and absences are now just for generating mock slots.
-// In a real-world scenario, this logic should be on the backend, reading from the database.
+// In a real app, this data would come from the database via a service.
 const mockDoctorSchedules = {
     'Dr. Alice Martin': {
         weeklySchedule: [ { dayName: 'Lundi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' }, { dayName: 'Mardi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' }, { dayName: 'Mercredi', isWorkingDay: false, startTime: '', endTime: '' }, { dayName: 'Jeudi', isWorkingDay: true, startTime: '10:00', endTime: '18:00' }, { dayName: 'Vendredi', isWorkingDay: true, startTime: '09:00', endTime: '13:00' }, { dayName: 'Samedi', isWorkingDay: false, startTime: '', endTime: '' }, { dayName: 'Dimanche', isWorkingDay: false, startTime: '', endTime: '' }, ],
@@ -108,14 +107,14 @@ const generateAppointmentsForDate = (
         durationMinutes: interval,
         isBooked: isAlreadyBooked,
         doctorId: selectedDoctor.id,
-        doctorName: selectedDoctor.name,
+        doctorName: selectedDoctor.fullName,
       });
     }
   }
   return appointments.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 };
 
-// This would come from an auth context in a real app
+// In a real app, this would come from the user's session after login.
 const SIMULATED_LOGGED_IN_PATIENT = {
   id: '3a5c1e8f-7b6d-4a9c-8e2f-1a3b5d7c9e0a', // Jean Dupont's ID from schema.sql
   name: 'Jean Dupont',
@@ -135,14 +134,12 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
 
-  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentSlot | BookedAppointment | null>(null);
-  const [dialogAction, setDialogAction] = useState<'book' | 'cancel' | null>(null);
+  const [selectedAppointment, setSelectedAppointment] = useState<AppointmentSlot | null>(null);
   const [showDialog, setShowDialog] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
   const [animateId, setAnimateId] = useState<string | null>(null);
-  const [animationType, setAnimationType] = useState<'booked' | 'cancelled' | null>();
   const [popoverOpen, setPopoverOpen] = useState(false);
 
   const fetchDoctors = useCallback(async () => {
@@ -195,7 +192,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
   }, [selectedDate, allBookedAppointments, selectedDoctor]);
 
 
-  const handleOpenDialog = (appointment: AppointmentSlot, action: 'book') => {
+  const handleOpenDialog = (appointment: AppointmentSlot) => {
     if (!isLoggedIn) {
         toast({ title: "Authentification requise", description: "Veuillez vous connecter pour réserver.", variant: "destructive" });
         router.push('/login');
@@ -206,17 +203,21 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
         return;
     }
     setSelectedAppointment(appointment);
-    setDialogAction(action);
     setShowDialog(true);
   };
 
   const handleConfirmDialog = async () => {
-    if (!selectedAppointment || dialogAction !== 'book' || !('durationMinutes' in selectedAppointment)) return;
+    if (!selectedAppointment) return;
     
     setIsConfirming(true);
     setAnimateId(selectedAppointment.id);
 
-    if (!isLoggedIn || !selectedDoctor) { router.push('/login'); setShowDialog(false); return; }
+    if (!isLoggedIn || !selectedDoctor) { 
+        toast({ title: "Erreur", description: "Session invalide.", variant: "destructive" });
+        router.push('/login'); 
+        setShowDialog(false); 
+        return; 
+    }
       
       try {
         const newAppointment = await createAppointment({
@@ -225,7 +226,6 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
           doctorId: selectedDoctor.id
         });
         
-        setAnimationType('booked');
         toast({ title: "Rendez-vous Confirmé!", description: `Rendez-vous avec ${selectedDoctor.fullName} le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} confirmé.`, className: "bg-accent text-accent-foreground" });
         
         const notificationInput: AppointmentNotificationInput = {
@@ -236,24 +236,22 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
         await sendPatientConfirmationEmail(notificationInput);
         await sendDoctorAppointmentNotificationEmail(notificationInput);
 
+        fetchBookedAppointmentsForDoctor();
+
       } catch (error) {
         console.error("Failed to book appointment:", error);
         toast({ title: "Erreur", description: "Impossible de réserver le rendez-vous.", variant: "destructive" });
+      } finally {
+          setIsConfirming(false);
+          setShowDialog(false);
+          setSelectedAppointment(null);
+          setTimeout(() => { setAnimateId(null); }, 600);
       }
-
-    fetchBookedAppointmentsForDoctor(); // Refresh data from DB
-    setIsConfirming(false);
-    
-    setTimeout(() => { setAnimateId(null); setAnimationType(null); }, 600);
-    setShowDialog(false);
-    setSelectedAppointment(null);
-    setDialogAction(null);
   };
 
   const handleCloseDialog = () => {
     setShowDialog(false);
     setSelectedAppointment(null);
-    setDialogAction(null);
   };
 
   return (
@@ -267,7 +265,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
             <div>
                 <h3 className="text-lg font-semibold mb-3 text-foreground flex items-center"><User className="mr-2 h-5 w-5 text-primary"/>Sélectionnez un médecin :</h3>
                 {isLoadingDoctors ? <Loader2 className="h-6 w-6 animate-spin"/> :
-                <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
+                <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId} disabled={!isLoggedIn}>
                     <SelectTrigger className="w-full sm:w-[320px] text-base py-3 shadow-sm"><SelectValue placeholder="Choisir un médecin" /></SelectTrigger>
                     <SelectContent>{allDoctors.map(doc => <SelectItem key={doc.id} value={doc.id}>{doc.fullName} - {doc.specialty}</SelectItem>)}</SelectContent>
                 </Select>}
@@ -277,7 +275,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                 <h3 className="text-lg font-semibold mb-3 text-foreground flex items-center"><CalendarDays className="mr-2 h-5 w-5 text-primary"/>Sélectionnez une date :</h3>
                 <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
                 <PopoverTrigger asChild>
-                    <Button variant={"outline"} className={cn("w-full sm:w-[320px] justify-start text-left font-normal text-base py-3 shadow-sm",!selectedDate && "text-muted-foreground")}>
+                    <Button variant={"outline"} className={cn("w-full sm:w-[320px] justify-start text-left font-normal text-base py-3 shadow-sm",!selectedDate && "text-muted-foreground")} disabled={!isLoggedIn || !selectedDoctorId}>
                         <CalendarDays className="mr-3 h-5 w-5 text-primary" />
                         {selectedDate ? format(selectedDate, "PPPP", { locale: fr }) : <span>Choisissez une date</span>}
                     </Button>
@@ -300,10 +298,10 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
                 : availableSlots.filter(app => !app.isBooked).length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {availableSlots.filter(app => !app.isBooked).map(app => (
-                    <Card key={app.id} className={cn("shadow-md hover:shadow-lg transition-all duration-300 flex flex-col text-center group", animateId === app.id && animationType === 'booked' ? "animate-out fade-out-50 duration-500" : "animate-in fade-in-0 duration-500")}>
+                    <Card key={app.id} className={cn("shadow-md hover:shadow-lg transition-all duration-300 flex flex-col text-center group", animateId === app.id ? "animate-out fade-out-50 duration-500" : "animate-in fade-in-0 duration-500")}>
                         <CardHeader className="pb-2 pt-4 flex-grow"><CardTitle className="text-lg font-medium">{format(app.dateTime, 'HH:mm', { locale: fr })}</CardTitle><CardDescription className="text-xs">{format(new Date(app.dateTime.getTime() + app.durationMinutes * 60000), 'HH:mm', { locale: fr })}</CardDescription></CardHeader>
                         <CardFooter className="p-3">
-                        <Button variant={isLoggedIn ? "default" : "secondary"} size="sm" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground group-hover:scale-105 transition-transform" onClick={() => handleOpenDialog(app, 'book')} disabled={!isLoggedIn}>
+                        <Button variant={isLoggedIn ? "default" : "secondary"} size="sm" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground group-hover:scale-105 transition-transform" onClick={() => handleOpenDialog(app)} disabled={!isLoggedIn}>
                             <CalendarCheck className="mr-2 h-4 w-4" />{isLoggedIn ? "Réserver" : "Se connecter"}
                         </Button>
                         </CardFooter>
@@ -315,23 +313,21 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
         </CardContent>
       </Card>
       
-      {!isLoggedIn && <Card className="p-8 text-center mt-10 bg-muted/30 rounded-lg"><Info className="mx-auto h-12 w-12 text-muted-foreground mb-4" /><p className="text-lg text-muted-foreground">Connectez-vous pour voir vos rendez-vous.</p></Card>}
-
       {selectedAppointment && (
         <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle className="font-headline text-xl">{dialogAction === 'book' ? 'Confirmation de réservation' : "Confirmation d'annulation"}</AlertDialogTitle>
+              <AlertDialogTitle className="font-headline text-xl">Confirmation de réservation</AlertDialogTitle>
               <AlertDialogDescription className="text-base">
-                Voulez-vous vraiment {dialogAction === 'book' ? `réserver ce créneau` : 'annuler ce créneau'} pour le <br />
-                <span className="font-semibold text-foreground">{format('dateTime' in selectedAppointment ? selectedAppointment.dateTime : parseISO(selectedAppointment.dateTime), "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })}</span>?
+                Voulez-vous vraiment réserver ce créneau pour le <br />
+                <span className="font-semibold text-foreground">{format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })}</span>?
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter className="mt-4">
               <AlertDialogCancel onClick={handleCloseDialog} disabled={isConfirming}>Non, retour</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmDialog} disabled={isConfirming} className={cn(dialogAction === 'book' ? 'bg-primary hover:bg-primary/90' : 'bg-destructive hover:bg-destructive/90', 'text-primary-foreground')}>
+              <AlertDialogAction onClick={handleConfirmDialog} disabled={isConfirming} className='bg-primary hover:bg-primary/90 text-primary-foreground'>
                 {isConfirming && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Oui, {dialogAction === 'book' ? 'confirmer' : "annuler"}
+                Oui, confirmer
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

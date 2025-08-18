@@ -8,14 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Settings, ArrowLeft, Save, Loader2 } from 'lucide-react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getPatientById, updatePatient } from '@/ai/flows/patientManagementFlow';
-import type { Patient, PatientUpdateInput } from '@/ai/flows/patientManagementFlow';
+import type { PatientUpdateInput } from '@/ai/flows/patientManagementFlow';
 
 const profileSchema = z.object({
   fullName: z.string().min(3, { message: "Le nom complet est requis." }),
@@ -32,29 +32,31 @@ export default function PatientProfilePage() {
   const { toast } = useToast();
   const [isLoggedIn, setIsLoggedIn] = useState(true); 
   const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
   });
 
-  useEffect(() => {
-    const fetchPatientData = async () => {
-      setIsLoading(true);
-      try {
-        const patientData = await getPatientById(SIMULATED_LOGGED_IN_PATIENT_ID);
-        if (patientData) {
-          reset(patientData);
-        } else {
-            toast({ title: "Erreur", description: "Profil patient non trouvé.", variant: "destructive" });
-        }
-      } catch (error) {
-        toast({ title: "Erreur", description: "Impossible de charger les informations du profil.", variant: "destructive" });
-      } finally {
-        setIsLoading(false);
+  const fetchPatientData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const patientData = await getPatientById(SIMULATED_LOGGED_IN_PATIENT_ID);
+      if (patientData) {
+        reset(patientData);
+      } else {
+        toast({ title: "Erreur", description: "Profil patient non trouvé.", variant: "destructive" });
       }
-    };
-    fetchPatientData();
+    } catch (error) {
+      toast({ title: "Erreur", description: "Impossible de charger les informations du profil.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   }, [reset, toast]);
+
+  useEffect(() => {
+    fetchPatientData();
+  }, [fetchPatientData]);
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -62,6 +64,7 @@ export default function PatientProfilePage() {
   };
 
   const onSubmit: SubmitHandler<ProfileFormValues> = async (data) => {
+    setIsSubmitting(true);
     try {
         const updateData: PatientUpdateInput = data;
         await updatePatient(SIMULATED_LOGGED_IN_PATIENT_ID, updateData);
@@ -73,13 +76,18 @@ export default function PatientProfilePage() {
     } catch (error) {
         console.error("Failed to update profile", error);
         toast({ title: "Erreur", description: "Impossible de mettre à jour le profil.", variant: "destructive" });
+    } finally {
+        setIsSubmitting(false);
     }
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+      <div className="min-h-screen bg-background flex flex-col">
+        <Header isLoggedIn={isLoggedIn} onLogout={handleLogout} />
+        <div className="flex-grow flex items-center justify-center">
+            <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        </div>
       </div>
     );
   }
@@ -100,16 +108,17 @@ export default function PatientProfilePage() {
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
               <div>
                 <Label htmlFor="fullName">Nom complet</Label>
-                <Input id="fullName" {...register("fullName")} />
+                <Input id="fullName" {...register("fullName")} disabled={isSubmitting}/>
                 {errors.fullName && <p className="text-sm text-destructive mt-1">{errors.fullName.message}</p>}
               </div>
               <div>
                 <Label htmlFor="email">Adresse e-mail</Label>
-                <Input id="email" type="email" {...register("email")} />
+                <Input id="email" type="email" {...register("email")} disabled={isSubmitting}/>
                 {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
               </div>
-              <Button type="submit" className="w-full">
-                <Save className="mr-2 h-5 w-5" /> Enregistrer les modifications
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
+                {isSubmitting ? "Enregistrement..." : "Enregistrer les modifications"}
               </Button>
             </form>
           </CardContent>

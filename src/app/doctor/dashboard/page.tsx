@@ -41,20 +41,22 @@ export default function DoctorDashboardPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg hover:shadow-xl transition-shadow opacity-50 cursor-not-allowed">
+          <Card className="shadow-lg hover:shadow-xl transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-lg font-medium">Gérer mes Disponibilités</CardTitle>
               <CalendarPlus className="h-6 w-6 text-primary" />
             </CardHeader>
             <CardContent className="space-y-3">
-              <p className="text-sm text-muted-foreground mb-2">Fonctionnalité en cours de développement.</p>
-              <Button className="w-full" disabled>
+              <p className="text-sm text-muted-foreground mb-2">Définissez vos horaires de travail et vos absences.</p>
+              <Button className="w-full" asChild>
+                <Link href="/doctor/availability">
                   <CalendarPlus className="mr-2 h-4 w-4"/>
                   Gérer les disponibilités
+                </Link>
               </Button>
             </CardContent>
              <CardFooter>
-                <p className="text-xs text-muted-foreground">Cette section permettra de définir vos horaires de travail et vos absences.</p>
+                <p className="text-xs text-muted-foreground">Cette section vous permet de configurer vos créneaux.</p>
             </CardFooter>
           </Card>
 

@@ -42,8 +42,10 @@ export default function PatientAppointmentsPage() {
 
   const fetchAppointments = useCallback(async () => {
     setIsLoading(true);
+    // In a real app, you'd get the patient ID from the session/auth context
+    const patientId = SIMULATED_LOGGED_IN_PATIENT.id; 
     try {
-        const patientAppointments = await listAppointmentsByPatient(SIMULATED_LOGGED_IN_PATIENT.id);
+        const patientAppointments = await listAppointmentsByPatient(patientId);
         setAppointments(patientAppointments);
     } catch (error) {
         console.error("Failed to fetch patient's appointments:", error);
@@ -135,7 +137,7 @@ export default function PatientAppointmentsPage() {
                     <TableCell>{app.doctorName}</TableCell>
                     <TableCell>{getStatusBadge(app.status)}</TableCell>
                     <TableCell className="text-right">
-                       {app.status === 'En attente' || app.status === 'Confirmé' ? (
+                       {(app.status === 'En attente' || app.status === 'Confirmé') && (
                          <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm" title="Annuler le rendez-vous">
@@ -155,7 +157,7 @@ export default function PatientAppointmentsPage() {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
-                       ) : null}
+                       )}
                     </TableCell>
                   </TableRow>
                 ))}

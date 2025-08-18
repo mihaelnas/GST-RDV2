@@ -13,11 +13,15 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Stethoscope, LogIn } from 'lucide-react';
+import { Stethoscope, LogIn, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
+import { login } from '@/ai/flows/authenticationFlow';
+import { useState } from 'react';
+
 
 const loginSchema = z.object({
   email: z.string().email({ message: "Adresse e-mail invalide." }),
@@ -28,24 +32,50 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 
 export default function LoginPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
   });
 
-  const onSubmit = (data: LoginFormValues) => {
-    console.log("Login data:", data);
-    // Simulation de connexion réussie et redirection basée sur le rôle (simulé par email)
-    const email = data.email.toLowerCase();
+  const onSubmit = async (data: LoginFormValues) => {
+    setIsSubmitting(true);
+    try {
+      // In a real app, you would store the returned user info in a secure context/session.
+      // For this demo, we'll just use it to redirect.
+      const loggedInUser = await login(data);
+      
+      toast({
+        title: "Connexion réussie",
+        description: `Bienvenue, ${loggedInUser.fullName} !`,
+        className: "bg-accent text-accent-foreground",
+      });
 
-    if (email.includes("medecin@") || email.includes("doctor@")) {
-      alert("Connexion simulée réussie en tant que Médecin ! Vous allez être redirigé vers votre tableau de bord.");
-      router.push('/doctor/dashboard');
-    } else if (email.includes("personnel@") || email.includes("staff@")) {
-      alert("Connexion simulée réussie en tant que Personnel de la clinique ! Vous allez être redirigé vers votre tableau de bord.");
-      router.push('/clinic-staff/dashboard');
-    } else {
-      alert("Connexion simulée réussie en tant que Patient ! Vous allez être redirigé vers votre tableau de bord.");
-      router.push('/patient/dashboard'); // Redirection vers le tableau de bord patient
+      // Redirect based on the role returned from the backend
+      switch (loggedInUser.role) {
+        case 'doctor':
+          router.push('/doctor/dashboard');
+          break;
+        case 'clinic_staff':
+          router.push('/clinic-staff/dashboard');
+          break;
+        case 'patient':
+          router.push('/patient/dashboard');
+          break;
+        default:
+          router.push('/'); // Fallback to home
+      }
+
+    } catch (error: any) {
+      console.error("Login failed:", error);
+      toast({
+        title: "Erreur de connexion",
+        description: error.message || "Email ou mot de passe incorrect.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -77,15 +107,13 @@ export default function LoginPage() {
                 placeholder="votreadresse@exemple.com"
                 {...register("email")}
                 className={errors.email ? "border-destructive" : ""}
+                disabled={isSubmitting}
               />
               {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label htmlFor="password">Mot de passe</Label>
-                {/* <Link href="#" className="text-sm text-primary hover:underline">
-                  Mot de passe oublié ?
-                </Link> */}
               </div>
               <Input
                 id="password"
@@ -93,10 +121,12 @@ export default function LoginPage() {
                 placeholder="********"
                 {...register("password")}
                 className={errors.password ? "border-destructive" : ""}
+                disabled={isSubmitting}
               />
               {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
             </div>
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
               Se connecter
             </Button>
           </form>
