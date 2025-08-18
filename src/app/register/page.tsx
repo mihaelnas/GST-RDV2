@@ -13,18 +13,20 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Stethoscope, UserPlus } from 'lucide-react';
+import { Stethoscope, UserPlus, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
+import { addPatient } from '@/ai/flows/patientManagementFlow';
+import { useState } from 'react';
 
 const registerSchema = z.object({
-  fullName: z.string().min(1, { message: "Le nom complet est requis." }),
+  fullName: z.string().min(3, { message: "Le nom complet est requis (min 3 caractères)." }),
   email: z.string().email({ message: "Adresse e-mail invalide." }),
   password: z.string().min(6, { message: "Le mot de passe doit contenir au moins 6 caractères." }),
   confirmPassword: z.string(),
-  // Le rôle est implicitement "patient" pour l'auto-inscription
 }).refine(data => data.password === data.confirmPassword, {
   message: "Les mots de passe ne correspondent pas.",
   path: ["confirmPassword"],
@@ -34,14 +36,40 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  
   const { register, handleSubmit, formState: { errors } } = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
   });
 
-  const onSubmit = (data: RegisterFormValues) => {
-    console.log("Registration data (Patient):", data);
-    alert("Inscription réussie en tant que Patient ! Vous allez être redirigé et connecté.");
-    router.push('/?loggedIn=true');
+  const onSubmit = async (data: RegisterFormValues) => {
+    setIsSubmitting(true);
+    try {
+      await addPatient({
+        fullName: data.fullName,
+        email: data.email,
+        password: data.password,
+      });
+
+      toast({
+        title: "Inscription Réussie !",
+        description: "Votre compte a été créé. Vous pouvez maintenant vous connecter.",
+        className: "bg-accent text-accent-foreground",
+      });
+
+      router.push('/login');
+
+    } catch (error: any) {
+      console.error("Registration failed:", error);
+      toast({
+        title: "Erreur d'inscription",
+        description: error.message || "Une erreur s'est produite. Veuillez réessayer.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -71,6 +99,7 @@ export default function RegisterPage() {
                 placeholder="Jean Dupont"
                 {...register("fullName")}
                 className={errors.fullName ? "border-destructive" : ""}
+                disabled={isSubmitting}
               />
               {errors.fullName && <p className="text-sm text-destructive">{errors.fullName.message}</p>}
             </div>
@@ -82,6 +111,7 @@ export default function RegisterPage() {
                 placeholder="votreadresse@exemple.com"
                 {...register("email")}
                 className={errors.email ? "border-destructive" : ""}
+                disabled={isSubmitting}
               />
               {errors.email && <p className="text-sm text-destructive">{errors.email.message}</p>}
             </div>
@@ -93,6 +123,7 @@ export default function RegisterPage() {
                 placeholder="********"
                 {...register("password")}
                 className={errors.password ? "border-destructive" : ""}
+                disabled={isSubmitting}
               />
               {errors.password && <p className="text-sm text-destructive">{errors.password.message}</p>}
             </div>
@@ -104,11 +135,13 @@ export default function RegisterPage() {
                 placeholder="********"
                 {...register("confirmPassword")}
                 className={errors.confirmPassword ? "border-destructive" : ""}
+                disabled={isSubmitting}
               />
               {errors.confirmPassword && <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>}
             </div>
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-              S&apos;inscrire
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
+              {isSubmitting ? "Inscription..." : "S'inscrire"}
             </Button>
           </form>
         </CardContent>
