@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { UserPlus, Edit, Trash2, Search, ArrowLeft, BriefcaseMedical, Loader2 } from 'lucide-react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogClose,
-  DialogFooter, // Correction: Ajout de DialogFooter
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -30,7 +30,7 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter as AlertDialogFooterComponent, // Renommé pour éviter conflit si AlertDialogFooter était utilisé directement
+  AlertDialogFooter as AlertDialogFooterComponent,
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
@@ -65,11 +65,11 @@ export default function DoctorsListPage() {
   const [doctorToEdit, setDoctorToEdit] = useState<Doctor | null>(null);
   const [doctorToDelete, setDoctorToDelete] = useState<Doctor | null>(null);
 
-  const { register, handleSubmit, formState: { errors }, reset, setValue, clearErrors } = useForm<DoctorFormValues>({
+  const { register, handleSubmit, formState: { errors }, reset, clearErrors } = useForm<DoctorFormValues>({
     resolver: zodResolver(doctorFormSchema),
   });
 
-  const fetchDoctors = async () => {
+  const fetchDoctors = useCallback(async () => {
     setIsLoading(true);
     try {
       const fetchedDoctors = await listDoctors();
@@ -80,11 +80,11 @@ export default function DoctorsListPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchDoctors();
-  }, []);
+  }, [fetchDoctors]);
 
   const handleLogout = () => {
     setIsLoggedIn(false); // Simulate logout
@@ -132,9 +132,9 @@ export default function DoctorsListPage() {
       toast({ title: "Médecin Ajouté", description: `Le Dr. ${data.fullName} a été ajouté avec succès.`, className: "bg-accent text-accent-foreground"});
       setIsAddModalOpen(false);
       fetchDoctors(); // Refresh list
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to add doctor:", error);
-      toast({ title: "Erreur", description: "Impossible d'ajouter le médecin.", variant: "destructive" });
+      toast({ title: "Erreur", description: error.message || "Impossible d'ajouter le médecin.", variant: "destructive" });
     }
   };
 
@@ -153,9 +153,9 @@ export default function DoctorsListPage() {
       setIsEditModalOpen(false);
       setDoctorToEdit(null);
       fetchDoctors(); // Refresh list
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to update doctor:", error);
-      toast({ title: "Erreur", description: "Impossible de modifier le médecin.", variant: "destructive" });
+      toast({ title: "Erreur", description: error.message || "Impossible de modifier le médecin.", variant: "destructive" });
     }
   };
   
@@ -173,9 +173,9 @@ export default function DoctorsListPage() {
       } else {
         toast({ title: "Erreur", description: result.message || "Impossible de supprimer le médecin.", variant: "destructive"});
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete doctor:", error);
-      toast({ title: "Erreur", description: "Une erreur s'est produite lors de la suppression.", variant: "destructive" });
+      toast({ title: "Erreur", description: error.message || "Une erreur s'est produite lors de la suppression.", variant: "destructive" });
     } finally {
       setDoctorToDelete(null); // Close confirmation dialog
     }
@@ -234,11 +234,27 @@ export default function DoctorsListPage() {
                         <Button variant="outline" size="sm" onClick={() => openEditModal(doctor)} title="Modifier">
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <AlertDialogTrigger asChild>
-                            <Button variant="destructive" size="sm" onClick={() => confirmDeleteDoctor(doctor)} title="Supprimer">
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
-                        </AlertDialogTrigger>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="sm" onClick={() => confirmDeleteDoctor(doctor)} title="Supprimer">
+                                  <Trash2 className="h-4 w-4" />
+                              </Button>
+                          </AlertDialogTrigger>
+                          {doctorToDelete && doctorToDelete.id === doctor.id && (
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Êtes-vous sûr de vouloir supprimer le Dr. {doctorToDelete?.fullName} ? Cette action est irréversible.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooterComponent>
+                                <AlertDialogCancel onClick={() => setDoctorToDelete(null)}>Annuler</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleDeleteDoctor} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
+                              </AlertDialogFooterComponent>
+                            </AlertDialogContent>
+                          )}
+                        </AlertDialog>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -310,7 +326,7 @@ export default function DoctorsListPage() {
             <DialogDescription>Mettez à jour les informations du Dr. {doctorToEdit?.fullName}.</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit(onEditSubmit)} className="space-y-4 py-4">
-            <input type="hidden" {...register("id")} /> {/* Keep id for form state if needed, but not sent for update data */}
+            <input type="hidden" {...register("id")} />
             <div>
               <Label htmlFor="editFullName">Nom complet</Label>
               <Input id="editFullName" {...register("fullName")} />
@@ -335,23 +351,6 @@ export default function DoctorsListPage() {
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!doctorToDelete} onOpenChange={() => setDoctorToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
-            <AlertDialogDescription>
-              Êtes-vous sûr de vouloir supprimer le Dr. {doctorToDelete?.fullName} ? Cette action est irréversible.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooterComponent>
-            <AlertDialogCancel onClick={() => setDoctorToDelete(null)}>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteDoctor} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
-          </AlertDialogFooterComponent>
-        </AlertDialogContent>
-      </AlertDialog>
-
     </div>
   );
 }

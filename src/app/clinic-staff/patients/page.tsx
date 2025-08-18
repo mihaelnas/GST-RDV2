@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { UserPlus, Edit, Trash2, Search, ArrowLeft, Users as UsersIcon, Loader2 } from 'lucide-react';
 import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -39,7 +39,6 @@ import {
 import { listPatients, addPatient, updatePatient, deletePatient } from '@/ai/flows/patientManagementFlow';
 import type { Patient, PatientCreateInput, PatientUpdateInput } from '@/ai/flows/patientManagementFlow';
 
-// Schema for form validation (client-side) - DOB removed
 const patientFormSchema = z.object({
   id: z.string().optional(),
   fullName: z.string().min(3, { message: "Le nom complet est requis (min 3 caractères)." }),
@@ -57,8 +56,8 @@ export default function PatientsListPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
   const [patientToEdit, setPatientToEdit] = useState<Patient | null>(null);
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
 
@@ -66,7 +65,7 @@ export default function PatientsListPage() {
     resolver: zodResolver(patientFormSchema),
   });
 
-  const fetchPatients = async () => {
+  const fetchPatients = useCallback(async () => {
     setIsLoading(true);
     try {
       const fetchedPatients = await listPatients();
@@ -77,11 +76,11 @@ export default function PatientsListPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
     fetchPatients();
-  }, []);
+  }, [fetchPatients]);
 
   const handleLogout = () => {
     setIsLoggedIn(false);
@@ -93,25 +92,33 @@ export default function PatientsListPage() {
     patient.email.toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a, b) => a.fullName.localeCompare(b.fullName)), [patients, searchTerm]);
 
-  const openAddModal = () => {
-    reset({ fullName: '', email: '', password: '' });
+  const openModal = (mode: 'add' | 'edit', patient?: Patient) => {
+    setModalMode(mode);
+    if (mode === 'add') {
+      reset({ fullName: '', email: '', password: '' });
+      setPatientToEdit(null);
+    } else if (patient) {
+      setPatientToEdit(patient);
+      reset({
+        id: patient.id,
+        fullName: patient.fullName,
+        email: patient.email,
+        password: '',
+      });
+    }
     clearErrors();
-    setIsAddModalOpen(true);
+    setIsModalOpen(true);
+  };
+  
+  const onFormSubmit: SubmitHandler<PatientFormValues> = async (data) => {
+    if (modalMode === 'add') {
+      await onAddSubmit(data);
+    } else {
+      await onEditSubmit(data);
+    }
   };
 
-  const openEditModal = (patient: Patient) => {
-    setPatientToEdit(patient);
-    reset({
-      id: patient.id,
-      fullName: patient.fullName,
-      email: patient.email,
-      password: '', 
-    });
-    clearErrors();
-    setIsEditModalOpen(true);
-  };
-
-  const onAddSubmit: SubmitHandler<PatientFormValues> = async (data) => {
+  const onAddSubmit = async (data: PatientFormValues) => {
     if (!data.password) {
       toast({ title: "Erreur de validation", description: "Le mot de passe est requis pour ajouter un patient.", variant: "destructive" });
       return;
@@ -124,15 +131,15 @@ export default function PatientsListPage() {
     try {
       await addPatient(createInput);
       toast({ title: "Patient Ajouté", description: `Le patient ${data.fullName} a été ajouté avec succès.`, className: "bg-accent text-accent-foreground" });
-      setIsAddModalOpen(false);
+      setIsModalOpen(false);
       fetchPatients();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to add patient:", error);
-      toast({ title: "Erreur", description: "Impossible d'ajouter le patient.", variant: "destructive" });
+      toast({ title: "Erreur", description: error.message || "Impossible d'ajouter le patient.", variant: "destructive" });
     }
   };
 
-  const onEditSubmit: SubmitHandler<PatientFormValues> = async (data) => {
+  const onEditSubmit = async (data: PatientFormValues) => {
     if (!patientToEdit || !patientToEdit.id) return;
 
     const updateData: PatientUpdateInput = {
@@ -143,12 +150,12 @@ export default function PatientsListPage() {
     try {
       await updatePatient(patientToEdit.id, updateData);
       toast({ title: "Patient Modifié", description: `Les informations de ${data.fullName} ont été mises à jour.`, className: "bg-accent text-accent-foreground" });
-      setIsEditModalOpen(false);
+      setIsModalOpen(false);
       setPatientToEdit(null);
       fetchPatients();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to update patient:", error);
-      toast({ title: "Erreur", description: "Impossible de modifier le patient.", variant: "destructive" });
+      toast({ title: "Erreur", description: error.message || "Impossible de modifier le patient.", variant: "destructive" });
     }
   };
 
@@ -166,9 +173,9 @@ export default function PatientsListPage() {
       } else {
         toast({ title: "Erreur", description: result.message || "Impossible de supprimer le patient.", variant: "destructive" });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete patient:", error);
-      toast({ title: "Erreur", description: "Une erreur s'est produite lors de la suppression.", variant: "destructive" });
+      toast({ title: "Erreur", description: error.message || "Une erreur s'est produite lors de la suppression.", variant: "destructive" });
     } finally {
       setPatientToDelete(null);
     }
@@ -182,7 +189,7 @@ export default function PatientsListPage() {
           <h2 className="text-3xl font-headline font-bold text-primary flex items-center">
             <UsersIcon className="mr-3 h-8 w-8" />Liste des Patients
           </h2>
-          <Button onClick={openAddModal}>
+          <Button onClick={() => openModal('add')}>
             <UserPlus className="mr-2 h-5 w-5" /> Ajouter un Patient
           </Button>
         </div>
@@ -222,14 +229,30 @@ export default function PatientsListPage() {
                       <TableCell className="font-medium">{patient.fullName}</TableCell>
                       <TableCell>{patient.email}</TableCell>
                       <TableCell className="text-right space-x-2">
-                        <Button variant="outline" size="sm" onClick={() => openEditModal(patient)} title="Modifier">
+                        <Button variant="outline" size="sm" onClick={() => openModal('edit', patient)} title="Modifier">
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="destructive" size="sm" onClick={() => confirmDeletePatient(patient)} title="Supprimer">
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
+                         <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                               <Button variant="destructive" size="sm" onClick={() => confirmDeletePatient(patient)} title="Supprimer">
+                                  <Trash2 className="h-4 w-4" />
+                               </Button>
+                            </AlertDialogTrigger>
+                             {patientToDelete && patientToDelete.id === patient.id && (
+                               <AlertDialogContent>
+                                   <AlertDialogHeader>
+                                       <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                                       <AlertDialogDescription>
+                                           Êtes-vous sûr de vouloir supprimer le patient {patientToDelete?.fullName} ? Cette action est irréversible.
+                                       </AlertDialogDescription>
+                                   </AlertDialogHeader>
+                                   <AlertDialogFooterComponent>
+                                       <AlertDialogCancel onClick={() => setPatientToDelete(null)}>Annuler</AlertDialogCancel>
+                                       <AlertDialogAction onClick={handleDeletePatient} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
+                                   </AlertDialogFooterComponent>
+                               </AlertDialogContent>
+                             )}
+                         </AlertDialog>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -256,18 +279,18 @@ export default function PatientsListPage() {
       </footer>
 
       {/* Add/Edit Patient Modal Form */}
-      <Dialog open={isAddModalOpen || isEditModalOpen} onOpenChange={isAddModalOpen ? setIsAddModalOpen : setIsEditModalOpen}>
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent className="sm:max-w-[525px]">
           <DialogHeader>
             <DialogTitle className="text-2xl font-headline flex items-center">
-              {isEditModalOpen ? <Edit className="mr-2 h-6 w-6 text-primary"/> : <UserPlus className="mr-2 h-6 w-6 text-primary"/>}
-              {isEditModalOpen ? 'Modifier le Patient' : 'Ajouter un Nouveau Patient'}
+              {modalMode === 'edit' ? <Edit className="mr-2 h-6 w-6 text-primary"/> : <UserPlus className="mr-2 h-6 w-6 text-primary"/>}
+              {modalMode === 'edit' ? 'Modifier le Patient' : 'Ajouter un Nouveau Patient'}
             </DialogTitle>
             <DialogDescription>
-              {isEditModalOpen ? `Mettez à jour les informations de ${patientToEdit?.fullName}.` : 'Remplissez les informations pour créer un compte patient.'}
+              {modalMode === 'edit' ? `Mettez à jour les informations de ${patientToEdit?.fullName}.` : 'Remplissez les informations pour créer un compte patient.'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit(isEditModalOpen ? onEditSubmit : onAddSubmit)} className="space-y-4 py-4">
+          <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4 py-4">
             <input type="hidden" {...register("id")} />
             <div>
               <Label htmlFor="fullName">Nom complet</Label>
@@ -279,7 +302,7 @@ export default function PatientsListPage() {
               <Input id="email" type="email" {...register("email")} placeholder="patient@example.com" />
               {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
             </div>
-            {!isEditModalOpen && (
+            {modalMode === 'add' && (
               <div>
                 <Label htmlFor="password">Mot de passe (provisoire)</Label>
                 <Input id="password" type="password" {...register("password")} placeholder="********" />
@@ -288,29 +311,13 @@ export default function PatientsListPage() {
             )}
             <DialogFooter>
               <DialogClose asChild>
-                <Button type="button" variant="outline" onClick={() => isAddModalOpen ? setIsAddModalOpen(false) : setIsEditModalOpen(false)}>Annuler</Button>
+                <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>Annuler</Button>
               </DialogClose>
-              <Button type="submit">{isEditModalOpen ? 'Enregistrer' : 'Créer le compte'}</Button>
+              <Button type="submit">{modalMode === 'edit' ? 'Enregistrer' : 'Créer le compte'}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={!!patientToDelete} onOpenChange={() => setPatientToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
-            <AlertDialogDescription>
-              Êtes-vous sûr de vouloir supprimer le patient {patientToDelete?.fullName} ? Cette action est irréversible.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooterComponent>
-            <AlertDialogCancel onClick={() => setPatientToDelete(null)}>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeletePatient} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
-          </AlertDialogFooterComponent>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

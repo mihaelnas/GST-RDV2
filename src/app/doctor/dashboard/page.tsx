@@ -46,9 +46,9 @@ export default function DoctorDashboardPage() {
               <CardTitle className="text-lg font-medium">Gérer mes Disponibilités</CardTitle>
               <CalendarPlus className="h-6 w-6 text-primary" />
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent>
               <p className="text-sm text-muted-foreground mb-2">Définissez vos horaires de travail et vos absences.</p>
-              <Button className="w-full" asChild>
+               <Button className="w-full" asChild>
                 <Link href="/doctor/availability">
                   <CalendarPlus className="mr-2 h-4 w-4"/>
                   Gérer les disponibilités
