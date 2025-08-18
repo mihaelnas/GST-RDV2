@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from 'next/link';
@@ -10,8 +9,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
-import { useState, useMemo } from 'react';
-import { FileText, ArrowLeft, CheckCircle, ListOrdered } from 'lucide-react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { FileText, ArrowLeft, CheckCircle, ListOrdered, Loader2 } from 'lucide-react';
 import { useForm, SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -19,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-
+import { listAppointmentsByDoctor } from '@/ai/flows/appointmentManagementFlow';
 
 const prescriptionSchema = z.object({
   patientId: z.string().min(1, { message: "Veuillez sélectionner un patient." }),
@@ -30,12 +29,10 @@ const prescriptionSchema = z.object({
 
 type PrescriptionFormValues = z.infer<typeof prescriptionSchema>;
 
-// Simulated data
-const doctorPatients = [
-  { id: 'patDoc1', name: 'Laura Durand' },
-  { id: 'patDoc2', name: 'Sophie Petit' },
-  { id: 'patDoc3', name: 'Jean Dupont' },
-];
+interface PatientInfo {
+    id: string;
+    name: string;
+}
 
 interface Prescription {
   id: string;
@@ -46,16 +43,38 @@ interface Prescription {
   instructions?: string;
 }
 
-const initialPrescriptions: Prescription[] = [
-    { id: 'presc1', date: new Date(2024,6,28), patientName: 'Laura Durand', medication: 'Amlodipine 5mg', dosage: '1 comprimé par jour', instructions: 'Pendant le repas du matin.'},
-    { id: 'presc2', date: new Date(2024,6,29), patientName: 'Sophie Petit', medication: 'Crème Tretinoine 0.025%', dosage: 'Application locale le soir', instructions: 'Éviter l\'exposition au soleil.'},
-];
+// In a real app, prescriptions would be saved to and fetched from the database.
+// For now, we keep them in memory but fetch the patient list dynamically.
+const initialPrescriptions: Prescription[] = [];
+
+// In a real app, this would come from an auth context after login.
+const CURRENT_DOCTOR_ID = 'a1b2c3d4-e5f6-7890-1234-567890abcdef'; // Dr. Alice Martin's ID from schema.sql
 
 export default function DoctorPrescriptionsPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>(initialPrescriptions);
+  const [doctorPatients, setDoctorPatients] = useState<PatientInfo[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchDoctorPatients = useCallback(async () => {
+    setIsLoading(true);
+    try {
+        const appointments = await listAppointmentsByDoctor(CURRENT_DOCTOR_ID);
+        const uniquePatients = Array.from(new Map(appointments.map(app => [app.patientId, { id: app.patientId, name: app.patientName }])).values());
+        setDoctorPatients(uniquePatients);
+    } catch (error) {
+        console.error("Failed to fetch doctor's patients:", error);
+        toast({ title: "Erreur", description: "Impossible de charger la liste de vos patients.", variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchDoctorPatients();
+  }, [fetchDoctorPatients]);
 
   const { control, register, handleSubmit, formState: { errors }, reset } = useForm<PrescriptionFormValues>({
     resolver: zodResolver(prescriptionSchema),
@@ -103,11 +122,12 @@ export default function DoctorPrescriptionsPage() {
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div>
                         <Label htmlFor="patientId">Patient</Label>
+                        {isLoading ? <Loader2 className="h-5 w-5 animate-spin"/> :
                         <Controller
                             name="patientId"
                             control={control}
                             render={({ field }) => (
-                                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <Select onValueChange={field.onChange} defaultValue={field.value} disabled={doctorPatients.length === 0}>
                                 <SelectTrigger id="patientId">
                                     <SelectValue placeholder="Sélectionner un patient" />
                                 </SelectTrigger>
@@ -116,7 +136,7 @@ export default function DoctorPrescriptionsPage() {
                                 </SelectContent>
                                 </Select>
                             )}
-                        />
+                        />}
                         {errors.patientId && <p className="text-sm text-destructive mt-1">{errors.patientId.message}</p>}
                     </div>
                     <div>
@@ -143,7 +163,7 @@ export default function DoctorPrescriptionsPage() {
             <Card className="shadow-lg">
                 <CardHeader>
                     <CardTitle className="flex items-center"><ListOrdered className="mr-2 h-5 w-5"/>Historique des Prescriptions</CardTitle>
-                    <CardDescription>Vos prescriptions récentes.</CardDescription>
+                    <CardDescription>Vos prescriptions récentes (simulation).</CardDescription>
                 </CardHeader>
                 <CardContent className="max-h-[500px] overflow-y-auto">
                     {prescriptions.length > 0 ? (
@@ -161,7 +181,6 @@ export default function DoctorPrescriptionsPage() {
                                     <TableCell>{format(presc.date, "dd/MM/yy", {locale: fr})}</TableCell>
                                     <TableCell>{presc.patientName}</TableCell>
                                     <TableCell className="truncate max-w-xs">{presc.medication}</TableCell>
-                                    {/* Add an eye icon to view details in a dialog if needed */}
                                 </TableRow>
                                 ))}
                             </TableBody>

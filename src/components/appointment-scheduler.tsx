@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -26,7 +25,7 @@ import { useRouter } from 'next/navigation';
 import { sendPatientConfirmationEmail, sendDoctorAppointmentNotificationEmail } from '@/ai/flows/notificationFlow';
 import type { AppointmentNotificationInput } from '@/ai/flows/notificationFlow';
 import { listDoctors, type Doctor } from '@/ai/flows/doctorManagementFlow';
-import { listAppointmentsByDoctor, createAppointment, type BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
+import { listAppointments, createAppointment, type BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
 
 interface AppointmentSlot {
   id: string;
@@ -99,7 +98,10 @@ const generateAppointmentsForDate = (
       }
       if (isPartialAbsence) continue;
 
-      const isAlreadyBooked = globalBookings.some(bookedApp => isEqual(parseISO(bookedApp.dateTime), slotDateTime));
+      const isAlreadyBooked = globalBookings.some(bookedApp => 
+        bookedApp.doctorId === selectedDoctor.id && 
+        isEqual(parseISO(bookedApp.dateTime), slotDateTime)
+      );
 
       appointments.push({
         id: format(slotDateTime, 'yyyyMMddHHmm') + `_doc${selectedDoctor.id}`,
@@ -158,29 +160,24 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
       }
   }, [toast]);
 
-  const fetchBookedAppointmentsForDoctor = useCallback(async () => {
-    if (!selectedDoctorId) return;
+  const fetchAllBookedAppointments = useCallback(async () => {
     setIsLoadingSlots(true);
     try {
-      const bookings = await listAppointmentsByDoctor(selectedDoctorId);
-      setAllBookedAppointments(bookings);
+      // Fetch all appointments to correctly generate available slots
+      const bookings = await listAppointments();
+      setAllBookedAppointments(bookings.map(b => ({...b, dateTime: b.dateTime})));
     } catch (error) {
         console.error("Failed to fetch booked appointments:", error);
         toast({ title: "Erreur", description: "Impossible de charger les rendez-vous existants.", variant: "destructive" });
     } finally {
         setIsLoadingSlots(false);
     }
-  }, [selectedDoctorId, toast]);
+  }, [toast]);
 
   useEffect(() => {
     fetchDoctors();
-  }, [fetchDoctors]);
-
-  useEffect(() => {
-    if (selectedDoctorId) {
-        fetchBookedAppointmentsForDoctor();
-    }
-  }, [selectedDoctorId, fetchBookedAppointmentsForDoctor]);
+    fetchAllBookedAppointments();
+  }, [fetchDoctors, fetchAllBookedAppointments]);
 
   useEffect(() => {
     if (selectedDoctor) {
@@ -236,7 +233,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
         await sendPatientConfirmationEmail(notificationInput);
         await sendDoctorAppointmentNotificationEmail(notificationInput);
 
-        fetchBookedAppointmentsForDoctor();
+        fetchAllBookedAppointments();
 
       } catch (error) {
         console.error("Failed to book appointment:", error);
@@ -319,7 +316,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
             <AlertDialogHeader>
               <AlertDialogTitle className="font-headline text-xl">Confirmation de réservation</AlertDialogTitle>
               <AlertDialogDescription className="text-base">
-                Voulez-vous vraiment réserver ce créneau pour le <br />
+                Voulez-vous vraiment réserver ce créneau avec <span className="font-semibold text-foreground">{selectedDoctor?.fullName}</span> le <br />
                 <span className="font-semibold text-foreground">{format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })}</span>?
               </AlertDialogDescription>
             </AlertDialogHeader>

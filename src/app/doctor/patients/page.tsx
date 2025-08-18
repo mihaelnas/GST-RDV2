@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from 'next/link';
@@ -7,43 +6,55 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { Users, ArrowLeft, Eye, Search } from 'lucide-react';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { useState, useMemo, useEffect, useCallback } from 'react';
+import { Users, ArrowLeft, Eye, Search, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
+import { listAppointmentsByDoctor, type BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
 
-// Simulated patient data for THIS doctor
-const initialPatientsData = [
-  { id: 'patDoc1', name: 'Laura Durand', dob: new Date(1990, 5, 15), lastVisit: new Date(2024, 6, 28), notes: 'Suivi cardiologique annuel.' },
-  { id: 'patDoc2', name: 'Sophie Petit', dob: new Date(2001, 1, 10), lastVisit: new Date(2024, 6, 29), notes: 'Consultation pour acné.' },
-  { id: 'patDoc3', name: 'Jean Dupont', dob: new Date(1975, 3, 12), lastVisit: new Date(2023, 11, 5), notes: 'Contrôle de routine.' },
-];
+// This would come from an auth context in a real app
+const CURRENT_DOCTOR_ID = 'a1b2c3d4-e5f6-7890-1234-567890abcdef'; // Dr. Alice Martin's ID from schema.sql
 
-interface DoctorPatient {
+interface PatientInfo {
   id: string;
   name: string;
-  dob: Date;
-  lastVisit: Date;
-  notes?: string;
 }
 
 export default function DoctorPatientsPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoggedIn, setIsLoggedIn] = useState(true); 
-  const [patients, setPatients] = useState<DoctorPatient[]>(initialPatientsData);
+  const [patients, setPatients] = useState<PatientInfo[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+
+  const fetchDoctorPatients = useCallback(async () => {
+    setIsLoading(true);
+    try {
+        const appointments = await listAppointmentsByDoctor(CURRENT_DOCTOR_ID);
+        // Deduplicate patients from the appointments list
+        const uniquePatients = Array.from(new Map(appointments.map(app => [app.patientId, { id: app.patientId, name: app.patientName }])).values());
+        setPatients(uniquePatients);
+    } catch (error) {
+        console.error("Failed to fetch doctor's patients:", error);
+        toast({ title: "Erreur", description: "Impossible de charger la liste de vos patients.", variant: "destructive" });
+    } finally {
+        setIsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchDoctorPatients();
+  }, [fetchDoctorPatients]);
 
   const handleLogout = () => {
     setIsLoggedIn(false);
     router.push('/');
   };
 
-  const filteredPatients = patients.filter(patient => 
+  const filteredPatients = useMemo(() => patients.filter(patient => 
     patient.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ).sort((a,b) => a.name.localeCompare(b.name)), [patients, searchTerm]);
 
   const handleViewPatientRecord = (patientName: string) => {
     toast({
@@ -61,7 +72,7 @@ export default function DoctorPatientsPage() {
           <h2 className="text-3xl font-headline font-bold text-primary flex items-center">
             <Users className="mr-3 h-8 w-8" /> Mes Patients
           </h2>
-          <p className="text-muted-foreground">Consultez les dossiers de vos patients.</p>
+          <p className="text-muted-foreground">Consultez la liste de vos patients ayant eu un rendez-vous.</p>
         </div>
 
         <Card className="shadow-lg">
@@ -78,13 +89,16 @@ export default function DoctorPatientsPage() {
             </div>
           </CardHeader>
           <CardContent>
-            {filteredPatients.length > 0 ? (
+            {isLoading ? (
+                <div className="flex justify-center items-center py-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                    <p className="ml-2 text-muted-foreground">Chargement...</p>
+                </div>
+            ) : filteredPatients.length > 0 ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nom</TableHead>
-                  <TableHead>Date de Naissance</TableHead>
-                  <TableHead>Dernière Visite</TableHead>
+                  <TableHead>Nom du Patient</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -92,8 +106,6 @@ export default function DoctorPatientsPage() {
                 {filteredPatients.map((patient) => (
                   <TableRow key={patient.id}>
                     <TableCell className="font-medium">{patient.name}</TableCell>
-                    <TableCell>{format(patient.dob, 'dd/MM/yyyy', { locale: fr })}</TableCell>
-                    <TableCell>{format(patient.lastVisit, 'dd/MM/yyyy', { locale: fr })}</TableCell>
                     <TableCell className="text-right">
                       <Button variant="outline" size="sm" onClick={() => handleViewPatientRecord(patient.name)}>
                         <Eye className="mr-2 h-4 w-4" /> Voir Dossier
