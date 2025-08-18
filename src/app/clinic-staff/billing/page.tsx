@@ -24,16 +24,16 @@ interface Invoice {
 }
 
 const initialInvoicesData: Invoice[] = [
+  // This is now mock data. In a real app, this would be fetched from appointments table.
   { id: 'inv001', patientName: 'Laura Durand', doctorName: 'Dr. Alice Martin', consultationDate: '2024-07-28T09:30:00', amount: 75, status: 'En attente de paiement' },
   { id: 'inv002', patientName: 'Paul Lefevre', doctorName: 'Dr. Bernard Dubois', consultationDate: '2024-07-28T11:00:00', amount: 80, status: 'En attente de paiement' },
   { id: 'inv003', patientName: 'Sophie Petit', doctorName: 'Dr. Alice Martin', consultationDate: '2024-07-29T14:30:00', amount: 75, status: 'Payée' },
-  { id: 'inv004', patientName: 'Marc Voisin', doctorName: 'Dr. Chloé Lambert', consultationDate: '2024-07-29T15:30:00', amount: 90, status: 'En attente de paiement' },
 ];
 
 export default function BillingPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); // Assume staff is logged in
+  const [isLoggedIn, setIsLoggedIn] = useState(true);
   const [invoices, setInvoices] = useState<Invoice[]>(initialInvoicesData);
 
   const handleLogout = () => {
@@ -67,7 +67,7 @@ export default function BillingPage() {
           <h2 className="text-3xl font-headline font-bold text-primary flex items-center">
             <CreditCard className="mr-3 h-8 w-8" /> Facturation et Paiements
           </h2>
-          <p className="text-muted-foreground">Gérez les factures des consultations et enregistrez les paiements.</p>
+          <p className="text-muted-foreground">Gérez les factures des consultations et enregistrez les paiements (fonctionnalité de démonstration).</p>
         </div>
 
         <Card className="shadow-lg mb-8">
@@ -133,7 +133,7 @@ export default function BillingPage() {
                       <TableCell className="font-medium">{invoice.id}</TableCell>
                       <TableCell>{invoice.patientName}</TableCell>
                       <TableCell>{invoice.doctorName}</TableCell>
-                      <TableCell>{format(new Date(invoice.consultationDate), "d MMM yyyy", { locale: fr })}</TableCell> {/* Simulating payment date as consultation date for now */}
+                      <TableCell>{format(new Date(invoice.consultationDate), "d MMM yyyy", { locale: fr })}</TableCell>
                       <TableCell>{invoice.amount.toFixed(2)}</TableCell>
                        <TableCell>
                         <Badge variant="default" className="bg-green-500 hover:bg-green-600 text-white">

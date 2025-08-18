@@ -20,7 +20,6 @@ const PatientSchema = z.object({
   id: z.string(),
   fullName: z.string(),
   email: z.string().email(),
-  dob: z.date(), // Date of Birth
 });
 export type Patient = z.infer<typeof PatientSchema>;
 
@@ -28,7 +27,6 @@ export type Patient = z.infer<typeof PatientSchema>;
 const PatientCreateInputSchema = z.object({
   fullName: z.string().min(3, "Le nom complet est requis (min 3 caractères)."),
   email: z.string().email("Adresse e-mail invalide."),
-  dob: z.date({ required_error: "La date de naissance est requise." }),
   password: z.string().min(6, "Le mot de passe doit contenir au moins 6 caractères."),
 });
 export type PatientCreateInput = z.infer<typeof PatientCreateInputSchema>;
@@ -37,7 +35,6 @@ export type PatientCreateInput = z.infer<typeof PatientCreateInputSchema>;
 const PatientUpdateInputSchema = z.object({
   fullName: z.string().min(3, "Le nom complet est requis (min 3 caractères).").optional(),
   email: z.string().email("Adresse e-mail invalide.").optional(),
-  dob: z.date().optional(),
 });
 export type PatientUpdateInput = z.infer<typeof PatientUpdateInputSchema>;
 

@@ -18,9 +18,8 @@ import { format, parseISO, parse } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils'; // Added import
+import { cn } from '@/lib/utils'; 
 
-// Exporting for use in AppointmentScheduler's mock data
 export interface DayOfWeek {
   dayName: string;
   isWorkingDay: boolean;
@@ -35,8 +34,8 @@ const dayOfWeekSchema = z.object({
   endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Format HH:MM requis." }).optional().or(z.literal('')),
 }).refine(data => {
   if (data.isWorkingDay) {
-    if (!data.startTime || data.startTime.trim() === '') return false; // Start time required if working
-    if (!data.endTime || data.endTime.trim() === '') return false; // End time required if working
+    if (!data.startTime || data.startTime.trim() === '') return false;
+    if (!data.endTime || data.endTime.trim() === '') return false;
     try {
       const start = parse(data.startTime, 'HH:mm', new Date());
       const end = parse(data.endTime, 'HH:mm', new Date());
@@ -100,9 +99,9 @@ const daysOfWeekList = [
 const defaultDoctorWeeklySchedule: WeeklyScheduleFormValues = {
   schedule: daysOfWeekList.map(day => ({
     dayName: day.name,
-    isWorkingDay: true, // All days are working by default
-    startTime: "", // Times are empty by default, doctor needs to fill them
-    endTime: "",
+    isWorkingDay: day.index >= 1 && day.index <= 5, // Monday to Friday by default
+    startTime: day.index >= 1 && day.index <= 5 ? "09:00" : "",
+    endTime: day.index >= 1 && day.index <= 5 ? "17:00" : "",
   })),
 };
 
@@ -159,15 +158,12 @@ export default function DoctorAvailabilityPage() {
   };
 
   const handleDeleteAbsence = (id: string) => {
-    const absenceToDelete = absences.find(a => a.id === id);
-    if (confirm(`Êtes-vous sûr de vouloir supprimer l'absence du ${absenceToDelete ? format(parseISO(absenceToDelete.date), "d MMM yyyy", { locale: fr }) : 'cette absence'} ?`)) {
-      setAbsences(prev => prev.filter(a => a.id !== id));
-      toast({
+    setAbsences(prev => prev.filter(a => a.id !== id));
+    toast({
         title: "Absence Supprimée",
         description: "L'absence a été supprimée.",
         variant: "destructive",
-      });
-    }
+    });
   };
 
   return (
@@ -185,8 +181,7 @@ export default function DoctorAvailabilityPage() {
           <CardHeader>
               <CardTitle className="flex items-center"><ListChecks className="mr-2 h-6 w-6"/>Mon Horaire Hebdomadaire Récurrent</CardTitle>
               <CardDescription>
-                Par défaut, tous les jours sont cochés comme potentiellement travaillés. 
-                Veuillez spécifier vos heures (début et fin) pour chaque jour de travail effectif, ou décochez les jours non travaillés.
+                Spécifiez vos heures pour chaque jour de travail ou décochez les jours non travaillés.
                 Les heures doivent être au format HH:MM (ex: 09:00).
               </CardDescription>
           </CardHeader>

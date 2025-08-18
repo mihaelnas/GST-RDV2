@@ -10,16 +10,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
 import { useState, useMemo, useEffect } from 'react';
-import { UserPlus, Edit, Trash2, Search, ArrowLeft, Users as UsersIcon, CalendarIcon, Loader2 } from 'lucide-react';
-import { useForm, SubmitHandler, Controller } from 'react-hook-form';
+import { UserPlus, Edit, Trash2, Search, ArrowLeft, Users as UsersIcon, Loader2 } from 'lucide-react';
+import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
-import { fr } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import {
   Dialog,
   DialogContent,
@@ -38,18 +33,17 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-  AlertDialogFooter,
+  AlertDialogFooter as AlertDialogFooterComponent,
 } from '@/components/ui/alert-dialog';
 
 import { listPatients, addPatient, updatePatient, deletePatient } from '@/ai/flows/patientManagementFlow';
 import type { Patient, PatientCreateInput, PatientUpdateInput } from '@/ai/flows/patientManagementFlow';
 
-// Schema for form validation (client-side) - ensure dob is treated as Date for Calendar
+// Schema for form validation (client-side) - DOB removed
 const patientFormSchema = z.object({
   id: z.string().optional(),
   fullName: z.string().min(3, { message: "Le nom complet est requis (min 3 caractères)." }),
   email: z.string().email({ message: "Adresse e-mail invalide." }),
-  dob: z.date({ required_error: "La date de naissance est requise." }),
   password: z.string().min(6, { message: "Le mot de passe doit contenir au moins 6 caractères." }).optional(),
 });
 
@@ -67,10 +61,8 @@ export default function PatientsListPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [patientToEdit, setPatientToEdit] = useState<Patient | null>(null);
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
-  const [isDobPopoverOpen, setIsDobPopoverOpen] = useState(false);
 
-
-  const { control, register, handleSubmit, formState: { errors }, reset, setValue, clearErrors } = useForm<PatientFormValues>({
+  const { register, handleSubmit, formState: { errors }, reset, clearErrors } = useForm<PatientFormValues>({
     resolver: zodResolver(patientFormSchema),
   });
 
@@ -78,7 +70,7 @@ export default function PatientsListPage() {
     setIsLoading(true);
     try {
       const fetchedPatients = await listPatients();
-      setPatients(fetchedPatients.map(p => ({...p, dob: new Date(p.dob) }))); // Ensure dob is Date object
+      setPatients(fetchedPatients);
     } catch (error) {
       console.error("Failed to fetch patients:", error);
       toast({ title: "Erreur", description: "Impossible de charger la liste des patients.", variant: "destructive" });
@@ -102,7 +94,7 @@ export default function PatientsListPage() {
   ).sort((a, b) => a.fullName.localeCompare(b.fullName)), [patients, searchTerm]);
 
   const openAddModal = () => {
-    reset({ fullName: '', email: '', dob: undefined, password: '' });
+    reset({ fullName: '', email: '', password: '' });
     clearErrors();
     setIsAddModalOpen(true);
   };
@@ -113,7 +105,6 @@ export default function PatientsListPage() {
       id: patient.id,
       fullName: patient.fullName,
       email: patient.email,
-      dob: patient.dob, // Already a Date object due to fetchPatients mapping
       password: '', 
     });
     clearErrors();
@@ -128,7 +119,6 @@ export default function PatientsListPage() {
     const createInput: PatientCreateInput = {
       fullName: data.fullName,
       email: data.email,
-      dob: data.dob,
       password: data.password,
     };
     try {
@@ -148,7 +138,6 @@ export default function PatientsListPage() {
     const updateData: PatientUpdateInput = {
       fullName: data.fullName,
       email: data.email,
-      dob: data.dob,
     };
 
     try {
@@ -224,7 +213,6 @@ export default function PatientsListPage() {
                   <TableRow>
                     <TableHead>Nom</TableHead>
                     <TableHead>Email</TableHead>
-                    <TableHead>Date de Naissance</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -233,7 +221,6 @@ export default function PatientsListPage() {
                     <TableRow key={patient.id}>
                       <TableCell className="font-medium">{patient.fullName}</TableCell>
                       <TableCell>{patient.email}</TableCell>
-                      <TableCell>{format(patient.dob, 'dd/MM/yyyy', { locale: fr })}</TableCell>
                       <TableCell className="text-right space-x-2">
                         <Button variant="outline" size="sm" onClick={() => openEditModal(patient)} title="Modifier">
                           <Edit className="h-4 w-4" />
@@ -292,46 +279,6 @@ export default function PatientsListPage() {
               <Input id="email" type="email" {...register("email")} placeholder="patient@example.com" />
               {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
             </div>
-            <div>
-              <Label htmlFor="dob">Date de Naissance</Label>
-              <Controller
-                name="dob"
-                control={control}
-                render={({ field }) => (
-                  <Popover open={isDobPopoverOpen} onOpenChange={setIsDobPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={"outline"}
-                        className={cn(
-                          "w-full justify-start text-left font-normal",
-                          !field.value && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {field.value ? format(field.value, "PPP", { locale: fr }) : <span>Choisissez une date</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar
-                        mode="single"
-                        selected={field.value}
-                        onSelect={(date) => {
-                            if (date) field.onChange(date);
-                            setIsDobPopoverOpen(false);
-                        }}
-                        defaultMonth={field.value}
-                        initialFocus
-                        locale={fr}
-                        captionLayout="dropdown-buttons"
-                        fromYear={1900}
-                        toYear={new Date().getFullYear()}
-                      />
-                    </PopoverContent>
-                  </Popover>
-                )}
-              />
-              {errors.dob && <p className="text-sm text-destructive mt-1">{errors.dob.message}</p>}
-            </div>
             {!isEditModalOpen && (
               <div>
                 <Label htmlFor="password">Mot de passe (provisoire)</Label>
@@ -358,10 +305,10 @@ export default function PatientsListPage() {
               Êtes-vous sûr de vouloir supprimer le patient {patientToDelete?.fullName} ? Cette action est irréversible.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
+          <AlertDialogFooterComponent>
             <AlertDialogCancel onClick={() => setPatientToDelete(null)}>Annuler</AlertDialogCancel>
             <AlertDialogAction onClick={handleDeletePatient} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
-          </AlertDialogFooter>
+          </AlertDialogFooterComponent>
         </AlertDialogContent>
       </AlertDialog>
     </div>

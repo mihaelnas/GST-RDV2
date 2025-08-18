@@ -13,12 +13,11 @@ import bcrypt from 'bcryptjs';
  */
 export async function getAllPatients(): Promise<Patient[]> {
   try {
-    const result = await pool.query('SELECT id, full_name, email, dob FROM patients ORDER BY full_name ASC');
+    const result = await pool.query('SELECT id, full_name, email FROM patients ORDER BY full_name ASC');
     return result.rows.map(row => ({
       id: row.id,
       fullName: row.full_name,
       email: row.email,
-      dob: new Date(row.dob),
     }));
   } catch (error) {
     console.error('Database Error in getAllPatients:', error);
@@ -34,13 +33,12 @@ export async function getAllPatients(): Promise<Patient[]> {
 export async function createPatient(data: PatientCreateInput): Promise<Patient> {
   const salt = await bcrypt.genSalt(10);
   const passwordHash = await bcrypt.hash(data.password, salt);
-  const dobFormatted = data.dob.toISOString().split('T')[0]; // Format to 'YYYY-MM-DD' for SQL DATE type
 
   const query = {
-    text: `INSERT INTO patients(full_name, email, dob, password_hash)
-           VALUES($1, $2, $3, $4)
-           RETURNING id, full_name, email, dob`,
-    values: [data.fullName, data.email, dobFormatted, passwordHash],
+    text: `INSERT INTO patients(full_name, email, password_hash)
+           VALUES($1, $2, $3)
+           RETURNING id, full_name, email`,
+    values: [data.fullName, data.email, passwordHash],
   };
 
   try {
@@ -50,7 +48,6 @@ export async function createPatient(data: PatientCreateInput): Promise<Patient> 
       id: row.id,
       fullName: row.full_name,
       email: row.email,
-      dob: new Date(row.dob),
     };
   } catch (error) {
     console.error('Database Error in createPatient:', error);
@@ -82,11 +79,7 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
         fields.push(`email = $${queryIndex++}`);
         values.push(data.email);
     }
-    if (data.dob) {
-        fields.push(`dob = $${queryIndex++}`);
-        values.push(data.dob.toISOString().split('T')[0]);
-    }
-
+    
     if (fields.length === 0) {
         const currentPatient = await getPatientById(id);
         if (!currentPatient) throw new Error('Patient not found with id: ' + id);
@@ -99,7 +92,7 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
         text: `UPDATE patients
                SET ${fields.join(', ')}, updated_at = NOW()
                WHERE id = $${queryIndex}
-               RETURNING id, full_name, email, dob`,
+               RETURNING id, full_name, email`,
         values: values,
     };
 
@@ -113,7 +106,6 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
           id: row.id,
           fullName: row.full_name,
           email: row.email,
-          dob: new Date(row.dob),
         };
     } catch (error) {
         console.error('Database Error in updatePatientById:', error);
@@ -151,7 +143,7 @@ export async function deletePatientById(id: string): Promise<boolean> {
  */
 export async function getPatientById(id: string): Promise<Patient | null> {
     const query = {
-        text: 'SELECT id, full_name, email, dob FROM patients WHERE id = $1',
+        text: 'SELECT id, full_name, email FROM patients WHERE id = $1',
         values: [id],
     };
     try {
@@ -164,7 +156,6 @@ export async function getPatientById(id: string): Promise<Patient | null> {
           id: row.id,
           fullName: row.full_name,
           email: row.email,
-          dob: new Date(row.dob),
         };
     } catch (error) {
         console.error('Database Error in getPatientById:', error);
