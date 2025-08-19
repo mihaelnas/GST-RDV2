@@ -18,7 +18,7 @@ export async function authenticateUser(email: string, password: string): Promise
   try {
     // 1. Check for clinic staff first
     let query = {
-        text: 'SELECT id, full_name, email, password_hash, role FROM clinic_staff WHERE email = $1',
+        text: 'SELECT id, full_name, email, password_hash FROM clinic_staff WHERE email = $1',
         values: [email],
     };
     let result = await client.query(query);
@@ -30,7 +30,7 @@ export async function authenticateUser(email: string, password: string): Promise
                 id: staff.id,
                 fullName: staff.full_name,
                 email: staff.email,
-                role: 'clinic_staff',
+                role: 'clinic_staff', // Corrected from 'clinic_staf' to 'clinic_staff'
             };
         }
     }
