@@ -60,7 +60,10 @@ const weeklyScheduleSchema = z.object({
 type WeeklyScheduleFormValues = z.infer<typeof weeklyScheduleSchema>;
 
 const absenceSchema = z.object({
-  date: z.string().min(1, { message: "La date est requise."}).refine(date => startOfDay(new Date(date)) >= startOfDay(new Date()), {
+  date: z.string().min(1, { message: "La date est requise."}).refine(date => {
+    // Compare dates at the start of the day to avoid timezone issues
+    return startOfDay(new Date(date)) >= startOfDay(new Date());
+  }, {
     message: "La date d'absence ne peut pas être dans le passé.",
   }),
   isFullDay: z.boolean(),
