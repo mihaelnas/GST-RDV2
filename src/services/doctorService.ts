@@ -97,7 +97,7 @@ export async function updateDoctorById(id: string, data: DoctorUpdateInput): Pro
 
     const query = {
         text: `UPDATE doctors
-               SET ${fields.join(', ')}, updated_at = NOW()
+               SET ${fields.join(', ')}
                WHERE id = $${queryIndex}
                RETURNING id, full_name, specialty, email`,
         values: values,
@@ -147,8 +147,8 @@ export async function deleteDoctorById(id: string): Promise<boolean> {
         throw new Error('Impossible de supprimer le médecin. Il a des rendez-vous futurs.');
     }
 
-    // To preserve history, we can set doctor_id to NULL for past appointments
-    // instead of deleting them. This prevents orphaned records if a foreign key constraint is strict.
+    // To preserve history, we set doctor_id to NULL for past appointments.
+    // We assume appointments table allows NULL on doctor_id for this archival purpose.
     await client.query(
         'UPDATE appointments SET doctor_id = NULL WHERE doctor_id = $1',
         [id]

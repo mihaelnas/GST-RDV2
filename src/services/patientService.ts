@@ -91,7 +91,7 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
 
     const query = {
         text: `UPDATE patients
-               SET ${fields.join(', ')}, updated_at = NOW()
+               SET ${fields.join(', ')}
                WHERE id = $${queryIndex}
                RETURNING id, full_name, email`,
         values: values,
@@ -146,7 +146,8 @@ export async function deletePatientById(id: string): Promise<boolean> {
       throw new Error('Impossible de supprimer le patient. Il a des rendez-vous futurs.');
     }
 
-    // Step 3: Dissociate past appointments from the patient to preserve history
+    // Step 3: Dissociate past appointments from the patient to preserve history.
+    // We assume the appointments table allows patient_id to be NULL for archival.
     await client.query(
         'UPDATE appointments SET patient_id = NULL WHERE patient_id = $1',
         [id]
