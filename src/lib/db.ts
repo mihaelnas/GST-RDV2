@@ -22,13 +22,15 @@ if (!process.env.POSTGRES_URL) {
 
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
-    // Explicitly set the client encoding to UTF8 to prevent issues with special characters.
-    // This is critical for handling accented characters correctly.
-    client_encoding: 'UTF8',
 });
 
-pool.on('connect', () => {
-    console.log('A client has connected to the PostgreSQL database.');
+// This is the definitive fix for character encoding issues.
+// It ensures that every new client connection from the pool will use UTF8.
+pool.on('connect', (client) => {
+    console.log('A client has connected, setting encoding to UTF8.');
+    client.query('SET client_encoding TO \'UTF8\'')
+        .then(() => console.log('Client encoding set to UTF8.'))
+        .catch(err => console.error('Error setting client encoding', err));
 });
 
 pool.on('error', (err, client) => {
