@@ -111,7 +111,7 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
     } catch (error) {
         console.error('Database Error in updatePatientById:', error);
         if ((error as any).code === '23505') {
-            throw new Error('Un patient avec cet e-mail existe déjà.');
+            throw new Error('Un autre patient utilise déjà cet e-mail.');
         }
         throw new Error('Failed to update patient.');
     }

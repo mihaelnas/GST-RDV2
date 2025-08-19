@@ -160,12 +160,11 @@ export default function PatientsListPage() {
     }
   };
 
-  const handleDeletePatient = async () => {
-    if (!patientToDelete || !patientToDelete.id) return;
+  const handleDeletePatient = async (patient: Patient) => {
     try {
-      const result = await deletePatient(patientToDelete.id);
+      const result = await deletePatient(patient.id);
       if (result.success) {
-        toast({ title: "Patient Supprimé", description: `Le patient ${patientToDelete.fullName} a été supprimé.`, variant: "destructive" });
+        toast({ title: "Patient Supprimé", description: `Le patient ${patient.fullName} a été supprimé.`, variant: "destructive" });
         fetchPatients();
       } else {
         toast({ title: "Erreur", description: result.message || "Impossible de supprimer le patient.", variant: "destructive" });
@@ -173,8 +172,6 @@ export default function PatientsListPage() {
     } catch (error: any) {
       console.error("Failed to delete patient:", error);
       toast({ title: "Erreur", description: error.message || "Une erreur s'est produite lors de la suppression.", variant: "destructive" });
-    } finally {
-      setPatientToDelete(null);
     }
   };
 
@@ -229,9 +226,9 @@ export default function PatientsListPage() {
                         <Button variant="outline" size="sm" onClick={() => openModal('edit', patient)} title="Modifier">
                           <Edit className="h-4 w-4" />
                         </Button>
-                         <AlertDialog onOpenChange={(open) => !open && setPatientToDelete(null)}>
+                         <AlertDialog>
                             <AlertDialogTrigger asChild>
-                               <Button variant="destructive" size="sm" onClick={() => setPatientToDelete(patient)} title="Supprimer">
+                               <Button variant="destructive" size="sm" title="Supprimer">
                                   <Trash2 className="h-4 w-4" />
                                </Button>
                             </AlertDialogTrigger>
@@ -239,12 +236,12 @@ export default function PatientsListPage() {
                                    <AlertDialogHeader>
                                        <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
                                        <AlertDialogDescription>
-                                           Êtes-vous sûr de vouloir supprimer le patient {patientToDelete?.fullName}? Cette action est irréversible.
+                                           Êtes-vous sûr de vouloir supprimer le patient {patient.fullName}? Cette action est irréversible.
                                        </AlertDialogDescription>
                                    </AlertDialogHeader>
                                    <AlertDialogFooterComponent>
                                        <AlertDialogCancel>Annuler</AlertDialogCancel>
-                                       <AlertDialogAction onClick={handleDeletePatient} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
+                                       <AlertDialogAction onClick={() => handleDeletePatient(patient)} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
                                    </AlertDialogFooterComponent>
                                </AlertDialogContent>
                          </AlertDialog>
@@ -316,5 +313,3 @@ export default function PatientsListPage() {
     </div>
   );
 }
-
-    
