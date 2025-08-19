@@ -120,6 +120,7 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
 
 /**
  * Deletes a patient by their ID, after checking for future appointments.
+ * Past appointments will have their patient_id set to NULL to preserve history.
  * @param {string} id - The ID of the patient to delete.
  * @returns {Promise<boolean>} A promise that resolves to true if deletion was successful.
  */
@@ -138,7 +139,13 @@ export async function deletePatientById(id: string): Promise<boolean> {
       throw new Error('Impossible de supprimer le patient. Il a des rendez-vous futurs.');
     }
 
-    // Proceed with deletion if no future appointments
+    // Set patient_id to NULL for past appointments to preserve history
+    await client.query(
+        'UPDATE appointments SET patient_id = NULL WHERE patient_id = $1 AND date_time < NOW()',
+        [id]
+    );
+
+    // Proceed with deletion of the patient
     const deleteResult = await client.query('DELETE FROM patients WHERE id = $1', [id]);
     
     await client.query('COMMIT');
