@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -25,7 +26,8 @@ import { useRouter } from 'next/navigation';
 import { sendPatientConfirmationEmail, sendDoctorAppointmentNotificationEmail } from '@/ai/flows/notificationFlow';
 import type { AppointmentNotificationInput } from '@/ai/flows/notificationFlow';
 import { listDoctors, type Doctor } from '@/ai/flows/doctorManagementFlow';
-import { listAppointments, createAppointment, type BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
+import { listAppointments, createAppointment, type AppointmentCreateInput } from '@/ai/flows/appointmentManagementFlow';
+import type { BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
 
 interface AppointmentSlot {
   id: string;
@@ -217,11 +219,13 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
     }
       
       try {
-        const newAppointment = await createAppointment({
-          dateTime: selectedAppointment.dateTime,
+        const appointmentInput: AppointmentCreateInput = {
+          dateTime: selectedAppointment.dateTime.toISOString(),
           patientId: SIMULATED_LOGGED_IN_PATIENT.id,
           doctorId: selectedDoctor.id
-        });
+        };
+
+        const newAppointment = await createAppointment(appointmentInput);
         
         toast({ title: "Rendez-vous Confirmé!", description: `Rendez-vous avec ${selectedDoctor.fullName} le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} confirmé.`, className: "bg-accent text-accent-foreground" });
         

@@ -110,10 +110,10 @@ export async function getAppointmentsByPatientId(patientId: string): Promise<Boo
 
 /**
  * Creates a new appointment.
- * @param {AppointmentCreateInput} data
+ * @param {Omit<AppointmentCreateInput, 'dateTime'> & { dateTime: Date }} data - The data for the new appointment, with dateTime as a Date object.
  * @returns {Promise<AppointmentDetails>}
  */
-export async function createAppointment(data: AppointmentCreateInput): Promise<AppointmentDetails> {
+export async function createAppointment(data: Omit<AppointmentCreateInput, 'dateTime'> & { dateTime: Date }): Promise<AppointmentDetails> {
   const query = {
     text: `
       INSERT INTO appointments(date_time, patient_id, doctor_id)

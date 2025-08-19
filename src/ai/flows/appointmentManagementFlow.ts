@@ -33,7 +33,7 @@ const BookedAppointmentSchema = z.object({
 export type BookedAppointment = z.infer<typeof BookedAppointmentSchema>;
 
 const AppointmentCreateInputSchema = z.object({
-  dateTime: z.date(),
+  dateTime: z.string().datetime(), // Changed from z.date() to z.string().datetime()
   patientId: z.string(),
   doctorId: z.string(),
 });
@@ -94,7 +94,11 @@ const createAppointmentFlow = ai.defineFlow(
     outputSchema: AppointmentDetailsSchema,
   },
   async (input) => {
-    return AppointmentService.createAppointment(input);
+    // The service layer already expects a string or Date that can be converted.
+    return AppointmentService.createAppointment({
+        ...input,
+        dateTime: new Date(input.dateTime), // Ensure it's a Date object for the service layer
+    });
   }
 );
 export async function createAppointment(input: AppointmentCreateInput): Promise<AppointmentDetails> {
