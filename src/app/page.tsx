@@ -10,6 +10,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { DayOfWeek } from '@/app/doctor/availability/page';
 import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
+import { checkDatabaseConnection } from '@/ai/flows/healthCheckFlow';
 
 // In a real app, this would be fetched from a central store or context
 // that gets its data from the database. For now, we manage it in the root page state.
@@ -35,6 +37,7 @@ export default function HomePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [doctorSchedules, setDoctorSchedules] = useState(initialDoctorSchedules);
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
     const user = sessionStorage.getItem('loggedInUser');
@@ -42,6 +45,24 @@ export default function HomePage() {
       setIsLoggedIn(true);
     }
   }, []);
+
+  // Effect to perform a health check on the database connection
+  useEffect(() => {
+    const verifyDbConnection = async () => {
+      const { success, error } = await checkDatabaseConnection();
+      if (!success) {
+        toast({
+          title: "Erreur de Connexion à la Base de Données",
+          description: "Impossible d'établir la connexion à la base de données. Les fonctionnalités de l'application seront limitées.",
+          variant: "destructive",
+          duration: Infinity, // Keep the toast visible
+        });
+        console.error("Database connection check failed:", error);
+      }
+    };
+    verifyDbConnection();
+  }, [toast]);
+
 
   // Effect to load schedules from localStorage on mount
   useEffect(() => {
