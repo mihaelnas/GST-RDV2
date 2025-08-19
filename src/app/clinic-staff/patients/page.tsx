@@ -39,7 +39,6 @@ import {
 import { listPatients, addPatient, updatePatient, deletePatient } from '@/ai/flows/patientManagementFlow';
 import type { Patient, PatientCreateInput, PatientUpdateInput } from '@/ai/flows/patientManagementFlow';
 
-
 const patientAddSchema = z.object({
   fullName: z.string().min(3, { message: "Le nom complet est requis (min 3 caractères)." }),
   email: z.string().email({ message: "Adresse e-mail invalide." }),
@@ -47,12 +46,13 @@ const patientAddSchema = z.object({
 });
 
 const patientEditSchema = z.object({
-    id: z.string(),
-    fullName: z.string().min(3, { message: "Le nom complet est requis (min 3 caractères)." }),
-    email: z.string().email({ message: "Adresse e-mail invalide." }),
+  id: z.string(),
+  fullName: z.string().min(3, { message: "Le nom complet est requis (min 3 caractères)." }),
+  email: z.string().email({ message: "Adresse e-mail invalide." }),
 });
 
-type PatientFormValues = z.infer<typeof patientAddSchema> & Partial<z.infer<typeof patientEditSchema>>;
+type PatientAddFormValues = z.infer<typeof patientAddSchema>;
+type PatientEditFormValues = z.infer<typeof patientEditSchema>;
 
 export default function PatientsListPage() {
   const router = useRouter();
@@ -67,7 +67,18 @@ export default function PatientsListPage() {
   const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
   const [patientToEdit, setPatientToEdit] = useState<Patient | null>(null);
 
-  const { register, handleSubmit, formState: { errors }, reset, clearErrors, trigger } = useForm<PatientFormValues>();
+  const addForm = useForm<PatientAddFormValues>({
+    resolver: zodResolver(patientAddSchema),
+    defaultValues: {
+      fullName: '',
+      email: '',
+      password: '',
+    },
+  });
+
+  const editForm = useForm<PatientEditFormValues>({
+    resolver: zodResolver(patientEditSchema),
+  });
 
   const fetchPatients = useCallback(async () => {
     setIsLoading(true);
@@ -98,36 +109,22 @@ export default function PatientsListPage() {
   ).sort((a, b) => a.fullName.localeCompare(b.fullName)), [patients, searchTerm]);
 
   const openAddModal = () => {
-    reset({ fullName: '', email: '', password: '' });
-    clearErrors();
+    addForm.reset();
     setIsAddModalOpen(true);
   };
 
   const openEditModal = (patient: Patient) => {
     setPatientToEdit(patient);
-    reset({
+    editForm.reset({
         id: patient.id,
         fullName: patient.fullName,
         email: patient.email,
     });
-    clearErrors();
     setIsEditModalOpen(true);
   };
   
-  const onAddSubmit: SubmitHandler<PatientFormValues> = async (data) => {
-     const validationResult = await trigger(["fullName", "email", "password"]);
-     if (!validationResult) return;
-
-    if (!data.password) {
-        toast({ title: "Erreur", description: "Le mot de passe est obligatoire.", variant: "destructive"});
-        return;
-    }
-
-    const createInput: PatientCreateInput = {
-      fullName: data.fullName,
-      email: data.email,
-      password: data.password,
-    };
+  const onAddSubmit: SubmitHandler<PatientAddFormValues> = async (data) => {
+    const createInput: PatientCreateInput = data;
 
     try {
       await addPatient(createInput);
@@ -140,9 +137,8 @@ export default function PatientsListPage() {
     }
   };
 
-  const onEditSubmit: SubmitHandler<PatientFormValues> = async (data) => {
-    const validationResult = await trigger(["fullName", "email"]);
-    if (!validationResult || !patientToEdit) return;
+  const onEditSubmit: SubmitHandler<PatientEditFormValues> = async (data) => {
+    if (!patientToEdit) return;
 
     const updateData: PatientUpdateInput = {
       fullName: data.fullName,
@@ -285,21 +281,21 @@ export default function PatientsListPage() {
                 Remplissez les informations pour créer un compte patient.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit(onAddSubmit)} className="space-y-4 py-4">
+            <form onSubmit={addForm.handleSubmit(onAddSubmit)} className="space-y-4 py-4">
                 <div>
                   <Label htmlFor="addFullName">Nom complet</Label>
-                  <Input id="addFullName" {...register("fullName")} placeholder="Nom Prénom" />
-                  {errors.fullName && <p className="text-sm text-destructive mt-1">{errors.fullName.message}</p>}
+                  <Input id="addFullName" {...addForm.register("fullName")} placeholder="Nom Prénom" />
+                  {addForm.formState.errors.fullName && <p className="text-sm text-destructive mt-1">{addForm.formState.errors.fullName.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="addEmail">Adresse e-mail</Label>
-                  <Input id="addEmail" type="email" {...register("email")} placeholder="patient@example.com" />
-                  {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
+                  <Input id="addEmail" type="email" {...addForm.register("email")} placeholder="patient@example.com" />
+                  {addForm.formState.errors.email && <p className="text-sm text-destructive mt-1">{addForm.formState.errors.email.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="addPassword">Mot de passe (provisoire)</Label>
-                  <Input id="addPassword" type="password" {...register("password")} placeholder="********" />
-                  {errors.password && <p className="text-sm text-destructive mt-1">{errors.password.message}</p>}
+                  <Input id="addPassword" type="password" {...addForm.register("password")} placeholder="********" />
+                  {addForm.formState.errors.password && <p className="text-sm text-destructive mt-1">{addForm.formState.errors.password.message}</p>}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
@@ -312,38 +308,40 @@ export default function PatientsListPage() {
       </Dialog>
       
       {/* Edit Patient Modal */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-[525px]">
-            <DialogHeader>
-              <DialogTitle className="text-2xl font-headline flex items-center">
-                <Edit className="mr-2 h-6 w-6 text-primary"/>
-                Modifier le Patient
-              </DialogTitle>
-              <DialogDescription>
-                Mettez à jour les informations de {patientToEdit?.fullName}.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleSubmit(onEditSubmit)} className="space-y-4 py-4">
-                <input type="hidden" {...register("id")} />
-                <div>
-                    <Label htmlFor="editFullName">Nom complet</Label>
-                    <Input id="editFullName" {...register("fullName")} />
-                    {errors.fullName && <p className="text-sm text-destructive mt-1">{errors.fullName.message}</p>}
-                </div>
-                <div>
-                    <Label htmlFor="editEmail">Adresse e-mail</Label>
-                    <Input id="editEmail" type="email" {...register("email")} />
-                    {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
-                </div>
-                <DialogFooter>
-                    <DialogClose asChild>
-                        <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>Annuler</Button>
-                    </DialogClose>
-                    <Button type="submit">Enregistrer</Button>
-                </DialogFooter>
-            </form>
-        </DialogContent>
-      </Dialog>
+      {patientToEdit && (
+        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+          <DialogContent className="sm:max-w-[525px]">
+              <DialogHeader>
+                <DialogTitle className="text-2xl font-headline flex items-center">
+                  <Edit className="mr-2 h-6 w-6 text-primary"/>
+                  Modifier le Patient
+                </DialogTitle>
+                <DialogDescription>
+                  Mettez à jour les informations de {patientToEdit?.fullName}.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4 py-4">
+                  <input type="hidden" {...editForm.register("id")} />
+                  <div>
+                      <Label htmlFor="editFullName">Nom complet</Label>
+                      <Input id="editFullName" {...editForm.register("fullName")} />
+                      {editForm.formState.errors.fullName && <p className="text-sm text-destructive mt-1">{editForm.formState.errors.fullName.message}</p>}
+                  </div>
+                  <div>
+                      <Label htmlFor="editEmail">Adresse e-mail</Label>
+                      <Input id="editEmail" type="email" {...editForm.register("email")} />
+                      {editForm.formState.errors.email && <p className="text-sm text-destructive mt-1">{editForm.formState.errors.email.message}</p>}
+                  </div>
+                  <DialogFooter>
+                      <DialogClose asChild>
+                          <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>Annuler</Button>
+                      </DialogClose>
+                      <Button type="submit">Enregistrer</Button>
+                  </DialogFooter>
+              </form>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
