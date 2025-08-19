@@ -127,6 +127,7 @@ export async function updateDoctorById(id: string, data: DoctorUpdateInput): Pro
 
 /**
  * Deletes a doctor by their ID, after checking for future appointments.
+ * Past appointments will have their doctor_id set to NULL to preserve history without invalid foreign keys.
  * @param {string} id - The ID of the doctor to delete.
  * @returns {Promise<boolean>} A promise that resolves to true if deletion was successful.
  */
@@ -145,7 +146,16 @@ export async function deleteDoctorById(id: string): Promise<boolean> {
         throw new Error('Impossible de supprimer le médecin. Il a des rendez-vous futurs.');
     }
 
-    // Proceed with deletion if no future appointments
+    // To preserve history, we can set doctor_id to NULL for past appointments
+    // instead of deleting them. This prevents orphaned records if a foreign key constraint is strict.
+    // Note: The table must allow NULL for doctor_id for this to work.
+    // If the schema requires a doctor_id, you might choose to delete or archive instead.
+    await client.query(
+        'UPDATE appointments SET doctor_id = NULL WHERE doctor_id = $1 AND date_time < NOW()',
+        [id]
+    );
+
+    // Proceed with deletion of the doctor
     const deleteResult = await client.query('DELETE FROM doctors WHERE id = $1', [id]);
     
     await client.query('COMMIT');
