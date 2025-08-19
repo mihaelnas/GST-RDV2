@@ -29,7 +29,7 @@ import { listDoctors, type Doctor } from '@/ai/flows/doctorManagementFlow';
 import { listAppointments, createAppointment, type AppointmentCreateInput } from '@/ai/flows/appointmentManagementFlow';
 import type { BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
 import type { LoginOutput } from '@/ai/schemas/authSchemas';
-
+import type { DayOfWeek } from '@/app/doctor/availability/page'; // Re-use type from availability page
 
 interface AppointmentSlot {
   id: string;
@@ -42,28 +42,14 @@ interface AppointmentSlot {
 
 interface AppointmentSchedulerProps {
   isLoggedIn: boolean;
+  doctorSchedules: Record<string, { weeklySchedule: DayOfWeek[], absences: any[] }>;
 }
-
-// In a real app, this data would come from the database via a service.
-const mockDoctorSchedules = {
-    'Dr. Alice Martin': {
-        weeklySchedule: [ { dayName: 'Lundi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' }, { dayName: 'Mardi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' }, { dayName: 'Mercredi', isWorkingDay: false, startTime: '', endTime: '' }, { dayName: 'Jeudi', isWorkingDay: true, startTime: '10:00', endTime: '18:00' }, { dayName: 'Vendredi', isWorkingDay: true, startTime: '09:00', endTime: '13:00' }, { dayName: 'Samedi', isWorkingDay: false, startTime: '', endTime: '' }, { dayName: 'Dimanche', isWorkingDay: false, startTime: '', endTime: '' }, ],
-        absences: [ { id: 'absDoc1_1', date: format(new Date(new Date().setDate(new Date().getDate() + 3)), 'yyyy-MM-dd'), isFullDay: true, reason: 'Conférence' } ],
-    },
-    'Dr. Bernard Dubois': {
-        weeklySchedule: [ { dayName: 'Lundi', isWorkingDay: true, startTime: '08:00', endTime: '12:00' }, { dayName: 'Mardi', isWorkingDay: true, startTime: '08:00', endTime: '12:00' }, { dayName: 'Mercredi', isWorkingDay: true, startTime: '13:00', endTime: '17:00' }, { dayName: 'Jeudi', isWorkingDay: true, startTime: '13:00', endTime: '17:00' }, { dayName: 'Vendredi', isWorkingDay: false, startTime: '', endTime: '' }, { dayName: 'Samedi', isWorkingDay: true, startTime: '09:00', endTime: '12:00' }, { dayName: 'Dimanche', isWorkingDay: false, startTime: '', endTime: '' }, ],
-        absences: [],
-    },
-    'Dr. Chloé Lambert': {
-        weeklySchedule: [ { dayName: 'Lundi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' }, { dayName: 'Mardi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' }, { dayName: 'Mercredi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' }, { dayName: 'Jeudi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' }, { dayName: 'Vendredi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' }, { dayName: 'Samedi', isWorkingDay: false, startTime: '', endTime: '' }, { dayName: 'Dimanche', isWorkingDay: false, startTime: '', endTime: '' }, ],
-        absences: [ { id: 'absDoc3_1', date: format(new Date(), 'yyyy-MM-dd'), isFullDay: false, startTime: '14:00', endTime: '17:00', reason: 'Rendez-vous personnel' } ],
-    },
-};
 
 const generateAppointmentsForDate = (
   date: Date,
   globalBookings: BookedAppointment[],
-  selectedDoctor?: Doctor
+  selectedDoctor?: Doctor,
+  doctorSchedules?: Record<string, { weeklySchedule: DayOfWeek[], absences: any[] }>
 ): AppointmentSlot[] => {
   const appointments: AppointmentSlot[] = [];
   const targetDate = startOfDay(date);
@@ -72,9 +58,11 @@ const generateAppointmentsForDate = (
   const currentDayName = dayNames[dayOfWeekIndex];
 
   if (isPast(targetDate) && !isEqual(targetDate, startOfDay(new Date()))) return [];
-  if (!selectedDoctor) return [];
+  if (!selectedDoctor || !doctorSchedules) return [];
   
-  const schedule = (mockDoctorSchedules as any)[selectedDoctor.fullName] || mockDoctorSchedules['Dr. Alice Martin'];
+  const schedule = doctorSchedules[selectedDoctor.fullName];
+  if (!schedule) return []; // No schedule found for this doctor
+
   let doctorWorkDay = schedule.weeklySchedule.find((d:any) => d.dayName === currentDayName);
 
   if (!doctorWorkDay || !doctorWorkDay.isWorkingDay || !doctorWorkDay.startTime || !doctorWorkDay.endTime) return [];
@@ -120,7 +108,7 @@ const generateAppointmentsForDate = (
   return appointments.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 };
 
-export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedulerProps) {
+export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: AppointmentSchedulerProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [availableSlots, setAvailableSlots] = useState<AppointmentSlot[]>([]);
   const [allBookedAppointments, setAllBookedAppointments] = useState<BookedAppointment[]>([]);
@@ -146,6 +134,8 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
     const userJson = sessionStorage.getItem('loggedInUser');
     if (userJson) {
       setPatient(JSON.parse(userJson));
+    } else {
+      setPatient(null);
     }
   }, [isLoggedIn]);
 
@@ -168,7 +158,6 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
   const fetchAllBookedAppointments = useCallback(async () => {
     setIsLoadingSlots(true);
     try {
-      // Fetch all appointments to correctly generate available slots
       const bookings = await listAppointments();
       setAllBookedAppointments(bookings.map(b => ({...b, dateTime: b.dateTime})));
     } catch (error) {
@@ -186,12 +175,12 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
 
   useEffect(() => {
     if (selectedDoctor) {
-        const generatedSlots = generateAppointmentsForDate(selectedDate, allBookedAppointments, selectedDoctor);
+        const generatedSlots = generateAppointmentsForDate(selectedDate, allBookedAppointments, selectedDoctor, doctorSchedules);
         setAvailableSlots(generatedSlots);
     } else {
         setAvailableSlots([]);
     }
-  }, [selectedDate, allBookedAppointments, selectedDoctor]);
+  }, [selectedDate, allBookedAppointments, selectedDoctor, doctorSchedules]);
 
 
   const handleOpenDialog = (appointment: AppointmentSlot) => {

@@ -8,15 +8,72 @@ import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import Image from 'next/image';
+import type { DayOfWeek } from '@/app/doctor/availability/page';
+
+// In a real app, this would be fetched from a central store or context
+// that gets its data from the database. For now, we manage it in the root page state.
+const initialDoctorSchedules: Record<string, { weeklySchedule: DayOfWeek[], absences: any[] }> = {
+  // These will be populated from localStorage or a default
+};
+
+const defaultDoctorWeeklySchedule = (name: string) => ({
+    weeklySchedule: [
+        { dayName: 'Lundi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
+        { dayName: 'Mardi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
+        { dayName: 'Mercredi', isWorkingDay: false, startTime: '', endTime: '' },
+        { dayName: 'Jeudi', isWorkingDay: true, startTime: '10:00', endTime: '18:00' },
+        { dayName: 'Vendredi', isWorkingDay: true, startTime: '09:00', endTime: '13:00' },
+        { dayName: 'Samedi', isWorkingDay: false, startTime: '', endTime: '' },
+        { dayName: 'Dimanche', isWorkingDay: false, startTime: '', endTime: '' },
+    ],
+    absences: [
+        { id: `abs_${name}_1`, date: format(new Date(new Date().setDate(new Date().getDate() + 3)), 'yyyy-MM-dd'), isFullDay: true, reason: 'Conférence' }
+    ],
+});
+
+import { format } from 'date-fns';
 
 export default function HomePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [doctorSchedules, setDoctorSchedules] = useState(initialDoctorSchedules);
   const router = useRouter();
 
   useEffect(() => {
     const user = sessionStorage.getItem('loggedInUser');
     if (user) {
       setIsLoggedIn(true);
+    }
+  }, []);
+
+  // Effect to load schedules from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedSchedules = localStorage.getItem('doctorSchedules');
+      if (savedSchedules) {
+        setDoctorSchedules(JSON.parse(savedSchedules));
+      } else {
+        // Initialize with default for known doctors if nothing is saved
+        const initialSchedules = {
+            'Dr. Alice Martin': defaultDoctorWeeklySchedule('Alice'),
+            'Dr. Bernard Dubois': { // Different schedule for variety
+                weeklySchedule: [
+                    { dayName: 'Lundi', isWorkingDay: true, startTime: '08:00', endTime: '12:00' },
+                    { dayName: 'Mardi', isWorkingDay: true, startTime: '08:00', endTime: '12:00' },
+                    { dayName: 'Mercredi', isWorkingDay: true, startTime: '13:00', endTime: '17:00' },
+                    { dayName: 'Jeudi', isWorkingDay: true, startTime: '13:00', endTime: '17:00' },
+                    { dayName: 'Vendredi', isWorkingDay: false, startTime: '', endTime: '' },
+                    { dayName: 'Samedi', isWorkingDay: true, startTime: '09:00', endTime: '12:00' },
+                    { dayName: 'Dimanche', isWorkingDay: false, startTime: '', endTime: '' },
+                ],
+                absences: []
+            },
+            'Dr. Chloé Lambert': defaultDoctorWeeklySchedule('Chloe'),
+        };
+        setDoctorSchedules(initialSchedules);
+        localStorage.setItem('doctorSchedules', JSON.stringify(initialSchedules));
+      }
+    } catch (error) {
+      console.error("Could not parse doctor schedules from localStorage", error);
     }
   }, []);
 
@@ -76,7 +133,7 @@ export default function HomePage() {
           </div>
         </section>
         
-        <AppointmentScheduler isLoggedIn={isLoggedIn} />
+        <AppointmentScheduler isLoggedIn={isLoggedIn} doctorSchedules={doctorSchedules} />
       </main>
 
       <footer className="py-8 text-center text-muted-foreground border-t mt-12">

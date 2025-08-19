@@ -18,7 +18,9 @@ import { format, parseISO, parse } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
-import { cn } from '@/lib/utils'; 
+import { cn } from '@/lib/utils';
+import type { LoginOutput } from '@/ai/schemas/authSchemas';
+
 
 export interface DayOfWeek {
   dayName: string;
@@ -96,26 +98,25 @@ const daysOfWeekList = [
   { name: "Dimanche", index: 0 },
 ];
 
-const defaultDoctorWeeklySchedule: WeeklyScheduleFormValues = {
+const defaultDoctorWeeklySchedule = (): WeeklyScheduleFormValues => ({
   schedule: daysOfWeekList.map(day => ({
     dayName: day.name,
     isWorkingDay: day.index >= 1 && day.index <= 5, // Monday to Friday by default
     startTime: day.index >= 1 && day.index <= 5 ? "09:00" : "",
     endTime: day.index >= 1 && day.index <= 5 ? "17:00" : "",
   })),
-};
+});
 
 
 export default function DoctorAvailabilityPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); 
-  
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [doctor, setDoctor] = useState<LoginOutput | null>(null);
   const [absences, setAbsences] = useState<Absence[]>([]);
 
   const { control: weeklyControl, register: weeklyRegister, handleSubmit: handleWeeklySubmit, formState: { errors: weeklyErrors }, reset: weeklyReset, watch: watchWeeklySchedule } = useForm<WeeklyScheduleFormValues>({
     resolver: zodResolver(weeklyScheduleSchema),
-    defaultValues: defaultDoctorWeeklySchedule, 
   });
   const { fields: weeklyFields } = useFieldArray({
     control: weeklyControl,
@@ -129,13 +130,52 @@ export default function DoctorAvailabilityPage() {
   
   const absenceIsFullDay = watchAbsenceForm("isFullDay");
 
+  useEffect(() => {
+    const userJson = sessionStorage.getItem('loggedInUser');
+    if (userJson) {
+        const user = JSON.parse(userJson);
+        if (user.role === 'doctor') {
+            setDoctor(user);
+            setIsLoggedIn(true);
+
+            // Load this doctor's schedule from localStorage
+            try {
+                const allSchedules = JSON.parse(localStorage.getItem('doctorSchedules') || '{}');
+                const mySchedule = allSchedules[user.fullName];
+                weeklyReset(mySchedule?.weeklySchedule ? { schedule: mySchedule.weeklySchedule } : defaultDoctorWeeklySchedule());
+                setAbsences(mySchedule?.absences || []);
+            } catch (e) {
+                weeklyReset(defaultDoctorWeeklySchedule());
+                setAbsences([]);
+            }
+        } else {
+            router.push('/login');
+        }
+    } else {
+      router.push('/login');
+    }
+  }, [router, weeklyReset]);
+
+  const saveSchedulesToLocalStorage = (scheduleData: { weeklySchedule: DayOfWeek[], absences: Absence[] }) => {
+    if (!doctor) return;
+    try {
+        const allSchedules = JSON.parse(localStorage.getItem('doctorSchedules') || '{}');
+        allSchedules[doctor.fullName] = scheduleData;
+        localStorage.setItem('doctorSchedules', JSON.stringify(allSchedules));
+    } catch(e) {
+        console.error("Failed to save schedule to localStorage", e);
+    }
+  };
+
+
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false);
     router.push('/');
   };
 
   const onWeeklySubmit: SubmitHandler<WeeklyScheduleFormValues> = (data) => {
-    console.log("Weekly schedule saved (simulated):", data.schedule);
+    saveSchedulesToLocalStorage({ weeklySchedule: data.schedule, absences });
     toast({
       title: "Horaire Hebdomadaire Enregistré",
       description: "Votre horaire hebdomadaire récurrent a été mis à jour.",
@@ -144,11 +184,13 @@ export default function DoctorAvailabilityPage() {
   };
 
   const onAbsenceSubmit: SubmitHandler<AbsenceFormValues> = (data) => {
-    const newAbsence: Absence = {
-      id: `abs${Date.now()}`, 
-      ...data
-    };
-    setAbsences(prev => [...prev, newAbsence].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+    const newAbsence: Absence = { id: `abs${Date.now()}`, ...data };
+    const updatedAbsences = [...absences, newAbsence].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    setAbsences(updatedAbsences);
+    
+    const currentWeeklySchedule = weeklyControl._getWatch('schedule');
+    saveSchedulesToLocalStorage({ weeklySchedule: currentWeeklySchedule, absences: updatedAbsences });
+
     toast({
       title: "Absence Ajoutée",
       description: `Absence pour le ${format(parseISO(data.date), "d MMM yyyy", { locale: fr })} ajoutée.`,
@@ -158,7 +200,12 @@ export default function DoctorAvailabilityPage() {
   };
 
   const handleDeleteAbsence = (id: string) => {
-    setAbsences(prev => prev.filter(a => a.id !== id));
+    const updatedAbsences = absences.filter(a => a.id !== id);
+    setAbsences(updatedAbsences);
+    
+    const currentWeeklySchedule = weeklyControl._getWatch('schedule');
+    saveSchedulesToLocalStorage({ weeklySchedule: currentWeeklySchedule, absences: updatedAbsences });
+
     toast({
         title: "Absence Supprimée",
         description: "L'absence a été supprimée.",
