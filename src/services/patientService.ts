@@ -138,7 +138,7 @@ export async function deletePatientById(id: string): Promise<boolean> {
 
     // Step 2: Check for future appointments for this patient
     const appointmentCheck = await client.query(
-        'SELECT 1 FROM appointments WHERE patient_id = $1 AND date_time >= NOW() LIMIT 1',
+        'SELECT 1 FROM appointments WHERE patient_id = $1 AND date >= NOW() LIMIT 1',
         [id]
     );
 

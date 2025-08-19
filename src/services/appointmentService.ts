@@ -13,29 +13,28 @@ export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]>
   const query = `
     SELECT
       a.id,
-      a.date_time,
+      a.date,
       a.patient_id,
       p.full_name AS patient_name,
       a.doctor_id,
       d.full_name AS doctor_name,
-      a.status,
-      a.duration_minutes
+      a.status
     FROM appointments a
     JOIN patients p ON a.patient_id = p.id
     JOIN doctors d ON a.doctor_id = d.id
-    ORDER BY a.date_time ASC;
+    ORDER BY a.date ASC;
   `;
   try {
     const result = await pool.query(query);
     return result.rows.map(row => ({
       id: row.id,
-      dateTime: row.date_time.toISOString(),
+      dateTime: row.date.toISOString(),
       patientId: row.patient_id,
       patientName: row.patient_name,
       doctorId: row.doctor_id,
       doctorName: row.doctor_name,
       status: row.status,
-      durationMinutes: row.duration_minutes,
+      durationMinutes: 30, // Defaulting as column doesn't exist
     }));
   } catch (error) {
     console.error('Database Error in getAllAppointmentsDetails:', error);
@@ -50,19 +49,19 @@ export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]>
  */
 export async function getAppointmentsByDoctorId(doctorId: string): Promise<BookedAppointment[]> {
     const query = {
-        text: `SELECT a.id, a.date_time, a.patient_id, p.full_name as patient_name, a.doctor_id, d.full_name as doctor_name, a.status
+        text: `SELECT a.id, a.date, a.patient_id, p.full_name as patient_name, a.doctor_id, d.full_name as doctor_name, a.status
                FROM appointments a
                JOIN doctors d on a.doctor_id = d.id
                JOIN patients p on a.patient_id = p.id
                WHERE a.doctor_id = $1
-               ORDER BY a.date_time ASC`,
+               ORDER BY a.date ASC`,
         values: [doctorId],
     };
     try {
         const result = await pool.query(query);
         return result.rows.map(row => ({
             id: row.id,
-            dateTime: row.date_time.toISOString(),
+            dateTime: row.date.toISOString(),
             patientId: row.patient_id,
             patientName: row.patient_name,
             doctorId: row.doctor_id,
@@ -82,19 +81,19 @@ export async function getAppointmentsByDoctorId(doctorId: string): Promise<Booke
  */
 export async function getAppointmentsByPatientId(patientId: string): Promise<BookedAppointment[]> {
     const query = {
-        text: `SELECT a.id, a.date_time, a.patient_id, p.full_name as patient_name, a.doctor_id, d.full_name as doctor_name, a.status 
+        text: `SELECT a.id, a.date, a.patient_id, p.full_name as patient_name, a.doctor_id, d.full_name as doctor_name, a.status 
                FROM appointments a
                JOIN doctors d on a.doctor_id = d.id
                JOIN patients p on a.patient_id = p.id
                WHERE a.patient_id = $1
-               ORDER BY a.date_time DESC`,
+               ORDER BY a.date DESC`,
         values: [patientId],
     };
     try {
         const result = await pool.query(query);
         return result.rows.map(row => ({
             id: row.id,
-            dateTime: row.date_time.toISOString(),
+            dateTime: row.date.toISOString(),
             patientId: row.patient_id,
             patientName: row.patient_name,
             doctorId: row.doctor_id,
@@ -116,9 +115,9 @@ export async function getAppointmentsByPatientId(patientId: string): Promise<Boo
 export async function createAppointment(data: Omit<AppointmentCreateInput, 'dateTime'> & { dateTime: Date }): Promise<AppointmentDetails> {
   const query = {
     text: `
-      INSERT INTO appointments(date_time, patient_id, doctor_id)
+      INSERT INTO appointments(date, patient_id, doctor_id)
       VALUES($1, $2, $3)
-      RETURNING id, date_time, patient_id, doctor_id, status, duration_minutes;
+      RETURNING id, date, patient_id, doctor_id, status;
     `,
     values: [data.dateTime, data.patientId, data.doctorId],
   };
@@ -139,13 +138,13 @@ export async function createAppointment(data: Omit<AppointmentCreateInput, 'date
 
     return {
       id: newAppointment.id,
-      dateTime: newAppointment.date_time.toISOString(),
+      dateTime: newAppointment.date.toISOString(),
       patientId: newAppointment.patient_id,
       patientName: names.patient_name,
       doctorId: newAppointment.doctor_id,
       doctorName: names.doctor_name,
       status: newAppointment.status,
-      durationMinutes: newAppointment.duration_minutes,
+      durationMinutes: 30, // Defaulting as column doesn't exist
     };
   } catch (error) {
     console.error('Database Error in createAppointment:', error);
