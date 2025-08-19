@@ -66,7 +66,7 @@ export async function getAppointmentsByDoctorId(doctorId: string): Promise<Booke
             patientId: row.patient_id,
             patientName: row.patient_name || 'Patient Supprimé',
             doctorId: row.doctor_id,
-            doctorName: row.doctor_name,
+            doctorName: row.doctor_name || 'Médecin Supprimé',
             status: row.status,
         }));
     } catch (error) {
@@ -96,7 +96,7 @@ export async function getAppointmentsByPatientId(patientId: string): Promise<Boo
             id: row.id,
             dateTime: new Date(row.date).toISOString(),
             patientId: row.patient_id,
-            patientName: row.patient_name,
+            patientName: row.patient_name || 'Patient Supprimé',
             doctorId: row.doctor_id,
             doctorName: row.doctor_name || 'Médecin Supprimé',
             status: row.status,
