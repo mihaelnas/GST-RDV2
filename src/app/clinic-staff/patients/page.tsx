@@ -83,6 +83,7 @@ export default function PatientsListPage() {
   }, [fetchPatients]);
 
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false);
     router.push('/');
   };
@@ -159,10 +160,6 @@ export default function PatientsListPage() {
     }
   };
 
-  const confirmDeletePatient = (patient: Patient) => {
-    setPatientToDelete(patient);
-  };
-
   const handleDeletePatient = async () => {
     if (!patientToDelete || !patientToDelete.id) return;
     try {
@@ -232,26 +229,24 @@ export default function PatientsListPage() {
                         <Button variant="outline" size="sm" onClick={() => openModal('edit', patient)} title="Modifier">
                           <Edit className="h-4 w-4" />
                         </Button>
-                         <AlertDialog>
+                         <AlertDialog onOpenChange={(open) => !open && setPatientToDelete(null)}>
                             <AlertDialogTrigger asChild>
-                               <Button variant="destructive" size="sm" onClick={() => confirmDeletePatient(patient)} title="Supprimer">
+                               <Button variant="destructive" size="sm" onClick={() => setPatientToDelete(patient)} title="Supprimer">
                                   <Trash2 className="h-4 w-4" />
                                </Button>
                             </AlertDialogTrigger>
-                             {patientToDelete && patientToDelete.id === patient.id && (
-                               <AlertDialogContent>
+                             <AlertDialogContent>
                                    <AlertDialogHeader>
                                        <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
                                        <AlertDialogDescription>
-                                           Êtes-vous sûr de vouloir supprimer le patient {patientToDelete?.fullName} ? Cette action est irréversible.
+                                           Êtes-vous sûr de vouloir supprimer le patient {patientToDelete?.fullName}? Cette action est irréversible.
                                        </AlertDialogDescription>
                                    </AlertDialogHeader>
                                    <AlertDialogFooterComponent>
-                                       <AlertDialogCancel onClick={() => setPatientToDelete(null)}>Annuler</AlertDialogCancel>
+                                       <AlertDialogCancel>Annuler</AlertDialogCancel>
                                        <AlertDialogAction onClick={handleDeletePatient} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
                                    </AlertDialogFooterComponent>
                                </AlertDialogContent>
-                             )}
                          </AlertDialog>
                       </TableCell>
                     </TableRow>
@@ -321,3 +316,5 @@ export default function PatientsListPage() {
     </div>
   );
 }
+
+    
