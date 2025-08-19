@@ -16,6 +16,7 @@ import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { getPatientById, updatePatient } from '@/ai/flows/patientManagementFlow';
 import type { PatientUpdateInput } from '@/ai/flows/patientManagementFlow';
+import type { LoginOutput } from '@/ai/schemas/authSchemas';
 
 const profileSchema = z.object({
   fullName: z.string().min(3, { message: "Le nom complet est requis." }),
@@ -24,13 +25,11 @@ const profileSchema = z.object({
 
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
-// This would come from an auth context in a real app
-const SIMULATED_LOGGED_IN_PATIENT_ID = '3a5c1e8f-7b6d-4a9c-8e2f-1a3b5d7c9e0a'; // Jean Dupont's ID from schema.sql
-
 export default function PatientProfilePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); 
+  const [isLoggedIn, setIsLoggedIn] = useState(false); 
+  const [patient, setPatient] = useState<LoginOutput | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -38,10 +37,26 @@ export default function PatientProfilePage() {
     resolver: zodResolver(profileSchema),
   });
 
+  useEffect(() => {
+    const userJson = sessionStorage.getItem('loggedInUser');
+    if (userJson) {
+      const user = JSON.parse(userJson);
+      if (user.role === 'patient') {
+        setPatient(user);
+        setIsLoggedIn(true);
+      } else {
+        router.push('/login');
+      }
+    } else {
+      router.push('/login');
+    }
+  }, [router]);
+
   const fetchPatientData = useCallback(async () => {
+    if (!patient) return;
     setIsLoading(true);
     try {
-      const patientData = await getPatientById(SIMULATED_LOGGED_IN_PATIENT_ID);
+      const patientData = await getPatientById(patient.id);
       if (patientData) {
         reset(patientData);
       } else {
@@ -52,27 +67,37 @@ export default function PatientProfilePage() {
     } finally {
       setIsLoading(false);
     }
-  }, [reset, toast]);
+  }, [patient, reset, toast]);
 
   useEffect(() => {
-    fetchPatientData();
-  }, [fetchPatientData]);
+    if (patient) {
+      fetchPatientData();
+    }
+  }, [patient, fetchPatientData]);
 
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false);
     router.push('/');
   };
 
   const onSubmit: SubmitHandler<ProfileFormValues> = async (data) => {
+    if (!patient) return;
     setIsSubmitting(true);
     try {
         const updateData: PatientUpdateInput = data;
-        await updatePatient(SIMULATED_LOGGED_IN_PATIENT_ID, updateData);
+        await updatePatient(patient.id, updateData);
         toast({
             title: "Profil Mis à Jour",
             description: "Vos informations de profil ont été enregistrées avec succès.",
             className: "bg-accent text-accent-foreground",
         });
+        // Refetch data to show the update
+        fetchPatientData();
+        // Also update session storage
+        const updatedUser = { ...patient, ...data };
+        sessionStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
+
     } catch (error) {
         console.error("Failed to update profile", error);
         toast({ title: "Erreur", description: "Impossible de mettre à jour le profil.", variant: "destructive" });

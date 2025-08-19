@@ -42,9 +42,12 @@ export default function LoginPage() {
   const onSubmit = async (data: LoginFormValues) => {
     setIsSubmitting(true);
     try {
-      // In a real app, you would store the returned user info in a secure context/session.
-      // For this demo, we'll just use it to redirect.
       const loggedInUser = await login(data);
+      
+      // Store user info in session storage for a simple session management
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
+      }
       
       toast({
         title: "Connexion réussie",

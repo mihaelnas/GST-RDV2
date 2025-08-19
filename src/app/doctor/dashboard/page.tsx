@@ -6,17 +6,40 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BarChart, CalendarDays, FileText, Settings, Users, CalendarPlus, ArrowLeft } from 'lucide-react';
+import type { LoginOutput } from '@/ai/schemas/authSchemas';
+
 
 export default function DoctorDashboardPage() {
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); 
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [doctor, setDoctor] = useState<LoginOutput | null>(null);
+
+  useEffect(() => {
+    const userJson = sessionStorage.getItem('loggedInUser');
+    if (userJson) {
+      const user = JSON.parse(userJson);
+      if (user.role === 'doctor') {
+        setDoctor(user);
+        setIsLoggedIn(true);
+      } else {
+        router.push('/login'); // Not a doctor, redirect
+      }
+    } else {
+      router.push('/login'); // Not logged in, redirect
+    }
+  }, [router]);
 
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false); 
     router.push('/'); 
   };
+
+  if (!doctor) {
+    return null; // or loading spinner
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -24,7 +47,7 @@ export default function DoctorDashboardPage() {
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="mb-8">
           <h2 className="text-3xl font-headline font-bold text-primary">Tableau de Bord Médecin</h2>
-          <p className="text-muted-foreground">Gérez vos activités et informations cliniques.</p>
+          <p className="text-muted-foreground">Bienvenue {doctor.fullName}. Gérez vos activités et informations cliniques.</p>
         </div>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

@@ -28,6 +28,8 @@ import type { AppointmentNotificationInput } from '@/ai/flows/notificationFlow';
 import { listDoctors, type Doctor } from '@/ai/flows/doctorManagementFlow';
 import { listAppointments, createAppointment, type AppointmentCreateInput } from '@/ai/flows/appointmentManagementFlow';
 import type { BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
+import type { LoginOutput } from '@/ai/schemas/authSchemas';
+
 
 interface AppointmentSlot {
   id: string;
@@ -118,13 +120,6 @@ const generateAppointmentsForDate = (
   return appointments.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 };
 
-// In a real app, this would come from the user's session after login.
-const SIMULATED_LOGGED_IN_PATIENT = {
-  id: '3a5c1e8f-7b6d-4a9c-8e2f-1a3b5d7c9e0a', // Jean Dupont's ID from schema.sql
-  name: 'Jean Dupont',
-  email: 'jean.dupont@example.com',
-};
-
 export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedulerProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [availableSlots, setAvailableSlots] = useState<AppointmentSlot[]>([]);
@@ -134,6 +129,7 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(true);
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | undefined>();
   const selectedDoctor = useMemo(() => allDoctors.find(doc => doc.id === selectedDoctorId), [selectedDoctorId, allDoctors]);
+  const [patient, setPatient] = useState<LoginOutput | null>(null);
 
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
@@ -145,6 +141,13 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
 
   const [animateId, setAnimateId] = useState<string | null>(null);
   const [popoverOpen, setPopoverOpen] = useState(false);
+
+  useEffect(() => {
+    const userJson = sessionStorage.getItem('loggedInUser');
+    if (userJson) {
+      setPatient(JSON.parse(userJson));
+    }
+  }, [isLoggedIn]);
 
   const fetchDoctors = useCallback(async () => {
       setIsLoadingDoctors(true);
@@ -206,22 +209,15 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
   };
 
   const handleConfirmDialog = async () => {
-    if (!selectedAppointment) return;
+    if (!selectedAppointment || !patient || !selectedDoctor) return;
     
     setIsConfirming(true);
     setAnimateId(selectedAppointment.id);
-
-    if (!isLoggedIn || !selectedDoctor) { 
-        toast({ title: "Erreur", description: "Session invalide.", variant: "destructive" });
-        router.push('/login'); 
-        setShowDialog(false); 
-        return; 
-    }
       
       try {
         const appointmentInput: AppointmentCreateInput = {
           dateTime: selectedAppointment.dateTime.toISOString(),
-          patientId: SIMULATED_LOGGED_IN_PATIENT.id,
+          patientId: patient.id,
           doctorId: selectedDoctor.id
         };
 
@@ -230,9 +226,9 @@ export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedule
         toast({ title: "Rendez-vous Confirmé!", description: `Rendez-vous avec ${selectedDoctor.fullName} le ${format(selectedAppointment.dateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr })} confirmé.`, className: "bg-accent text-accent-foreground" });
         
         const notificationInput: AppointmentNotificationInput = {
-          patientName: SIMULATED_LOGGED_IN_PATIENT.name, patientEmail: SIMULATED_LOGGED_IN_PATIENT.email,
+          patientName: patient.fullName, patientEmail: patient.email,
           doctorName: selectedDoctor.fullName, doctorEmail: selectedDoctor.email,
-          appointmentDateTime: selectedAppointment.dateTime, appointmentId: newAppointment.id,
+          appointmentDateTime: selectedAppointment.dateTime.toISOString(), appointmentId: newAppointment.id,
         };
         await sendPatientConfirmationEmail(notificationInput);
         await sendDoctorAppointmentNotificationEmail(notificationInput);

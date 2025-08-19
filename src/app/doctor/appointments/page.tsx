@@ -16,25 +16,38 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { listAppointmentsByDoctor, BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
-
-// In a real app, this would come from an auth context after login.
-const CURRENT_DOCTOR_ID = 'a1b2c3d4-e5f6-7890-1234-567890abcdef'; // Dr. Alice Martin's ID from schema.sql
-const CURRENT_DOCTOR_NAME = 'Dr. Alice Martin';
-
+import type { LoginOutput } from '@/ai/schemas/authSchemas';
 
 export default function DoctorAppointmentsPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); 
+  const [isLoggedIn, setIsLoggedIn] = useState(false); 
+  const [doctor, setDoctor] = useState<LoginOutput | null>(null);
   
   const [doctorAppointments, setDoctorAppointments] = useState<BookedAppointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [filterDate, setFilterDate] = useState('');
 
+  useEffect(() => {
+    const userJson = sessionStorage.getItem('loggedInUser');
+    if (userJson) {
+      const user = JSON.parse(userJson);
+      if (user.role === 'doctor') {
+        setDoctor(user);
+        setIsLoggedIn(true);
+      } else {
+        router.push('/login');
+      }
+    } else {
+      router.push('/login');
+    }
+  }, [router]);
+
   const fetchAppointments = useCallback(async () => {
+    if (!doctor) return;
     setIsLoading(true);
     try {
-        const appointmentsForThisDoctor = await listAppointmentsByDoctor(CURRENT_DOCTOR_ID);
+        const appointmentsForThisDoctor = await listAppointmentsByDoctor(doctor.id);
         setDoctorAppointments(appointmentsForThisDoctor);
     } catch (error) {
         console.error("Failed to fetch doctor's appointments:", error);
@@ -42,14 +55,17 @@ export default function DoctorAppointmentsPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, doctor]);
   
   useEffect(() => {
-    fetchAppointments();
-  }, [fetchAppointments]);
+    if (doctor) {
+      fetchAppointments();
+    }
+  }, [doctor, fetchAppointments]);
 
 
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false);
     router.push('/');
   };
@@ -92,7 +108,7 @@ export default function DoctorAppointmentsPage() {
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="mb-8">
           <h2 className="text-3xl font-headline font-bold text-primary flex items-center">
-            <CalendarClock className="mr-3 h-8 w-8" /> Mes Rendez-vous ({CURRENT_DOCTOR_NAME})
+            <CalendarClock className="mr-3 h-8 w-8" /> Mes Rendez-vous ({doctor?.fullName})
           </h2>
           <p className="text-muted-foreground">Consultez votre planning de consultations.</p>
         </div>

@@ -6,20 +6,40 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User, CalendarPlus, ClipboardList, Settings, ArrowLeft } from 'lucide-react';
+import type { LoginOutput } from '@/ai/schemas/authSchemas';
 
-// This would come from an auth context in a real app
-const SIMULATED_LOGGED_IN_PATIENT_NAME = 'Jean Dupont';
 
 export default function PatientDashboardPage() {
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); 
+  const [isLoggedIn, setIsLoggedIn] = useState(false); 
+  const [patient, setPatient] = useState<LoginOutput | null>(null);
+
+  useEffect(() => {
+    const userJson = sessionStorage.getItem('loggedInUser');
+    if (userJson) {
+      const user = JSON.parse(userJson);
+      if (user.role === 'patient') {
+        setPatient(user);
+        setIsLoggedIn(true);
+      } else {
+        router.push('/login'); // Not a patient, redirect
+      }
+    } else {
+      router.push('/login'); // Not logged in, redirect
+    }
+  }, [router]);
 
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false);
     router.push('/');
   };
+
+  if (!patient) {
+    return null; // Or a loading spinner
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -27,7 +47,7 @@ export default function PatientDashboardPage() {
       <main className="flex-grow container mx-auto px-4 py-8">
         <div className="mb-8">
           <h2 className="text-3xl font-headline font-bold text-primary">Tableau de Bord Patient</h2>
-          <p className="text-muted-foreground">Bienvenue, {SIMULATED_LOGGED_IN_PATIENT_NAME}. Gérez vos rendez-vous et vos informations ici.</p>
+          <p className="text-muted-foreground">Bienvenue, {patient.fullName}. Gérez vos rendez-vous et vos informations ici.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -39,7 +59,7 @@ export default function PatientDashboardPage() {
             <CardContent>
               <p className="text-sm text-muted-foreground mb-4">Consultez les disponibilités et réservez un créneau.</p>
               <Button className="w-full" asChild>
-                <Link href="/?fromDashboard=true">Planifier un nouveau rendez-vous</Link>
+                <Link href="/">Planifier un nouveau rendez-vous</Link>
               </Button>
             </CardContent>
           </Card>

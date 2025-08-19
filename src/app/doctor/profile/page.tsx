@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -13,15 +14,8 @@ import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
+import type { LoginOutput } from '@/ai/schemas/authSchemas';
 
-// This is a placeholder as a full auth system is not in place.
-// In a real app, this would be retrieved from a session context.
-const CURRENT_DOCTOR_DATA = {
-    id: 'a1b2c3d4-e5f6-7890-1234-567890abcdef', // Dr. Alice Martin's ID from schema.sql
-    fullName: 'Dr. Alice Martin',
-    specialty: 'Cardiologie',
-    email: 'alice.martin@clinique.fr',
-};
 
 const profileSchema = z.object({
   fullName: z.string().min(3, { message: "Le nom complet est requis." }),
@@ -35,26 +29,51 @@ type ProfileFormValues = z.infer<typeof profileSchema>;
 export default function DoctorProfilePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); 
+  const [isLoggedIn, setIsLoggedIn] = useState(false); 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [doctor, setDoctor] = useState<LoginOutput | null>(null);
 
   const { register, handleSubmit, formState: { errors }, reset } = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
-    defaultValues: CURRENT_DOCTOR_DATA, // Pre-fill with current doctor's data
   });
 
+  useEffect(() => {
+    const userJson = sessionStorage.getItem('loggedInUser');
+    if (userJson) {
+      const user = JSON.parse(userJson);
+      if (user.role === 'doctor') {
+        setDoctor(user);
+        setIsLoggedIn(true);
+        // We can't get specialty from the basic login output, so we just pre-fill what we have.
+        // A real app would have a dedicated getDoctorProfile flow.
+        reset({ fullName: user.fullName, email: user.email, specialty: '' });
+      } else {
+        router.push('/login');
+      }
+    } else {
+      router.push('/login');
+    }
+  }, [router, reset]);
+
+
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false);
     router.push('/');
   };
 
   const onSubmit: SubmitHandler<ProfileFormValues> = async (data) => {
+    if (!doctor) return;
     setIsSubmitting(true);
     // In a real app, you would call an `updateDoctor` flow here.
     // For now, we simulate the API call and show a toast.
     try {
         console.log("Simulating update for doctor profile:", data);
         await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate network delay
+        
+        const updatedUser = { ...doctor, ...data };
+        sessionStorage.setItem('loggedInUser', JSON.stringify(updatedUser));
+        
         toast({
             title: "Profil Mis à Jour (Simulation)",
             description: "Vos informations de profil ont été enregistrées avec succès.",

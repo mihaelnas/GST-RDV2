@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import AppointmentScheduler from '@/components/appointment-scheduler';
 import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
@@ -11,22 +11,19 @@ import Image from 'next/image';
 
 export default function HomePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const searchParams = useSearchParams();
   const router = useRouter();
 
   useEffect(() => {
-    // Cette logique de connexion via query param est conservée pour la simplicité de la démo
-    // mais sera remplacée par un vrai système d'authentification.
-    if (searchParams.get('loggedIn') === 'true' || searchParams.get('fromDashboard') === 'true') {
+    const user = sessionStorage.getItem('loggedInUser');
+    if (user) {
       setIsLoggedIn(true);
-      const newPath = window.location.pathname;
-      router.replace(newPath, { scroll: false });
     }
-  }, [searchParams, router]);
+  }, []);
 
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false);
-    router.push('/', { scroll: false }); // Redirige vers l'accueil en nettoyant l'URL
+    router.push('/');
   };
 
   return (

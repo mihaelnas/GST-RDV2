@@ -25,27 +25,39 @@ import { fr } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { listAppointmentsByPatient, deleteAppointment, type BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
+import type { LoginOutput } from '@/ai/schemas/authSchemas';
 
-// This would come from an auth context in a real app
-const SIMULATED_LOGGED_IN_PATIENT = {
-  id: '3a5c1e8f-7b6d-4a9c-8e2f-1a3b5d7c9e0a', // Jean Dupont's ID from schema.sql
-  name: 'Jean Dupont',
-};
 
 export default function PatientAppointmentsPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); 
+  const [isLoggedIn, setIsLoggedIn] = useState(false); 
+  const [patient, setPatient] = useState<LoginOutput | null>(null);
   
   const [appointments, setAppointments] = useState<BookedAppointment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  useEffect(() => {
+    const userJson = sessionStorage.getItem('loggedInUser');
+    if (userJson) {
+      const user = JSON.parse(userJson);
+      if (user.role === 'patient') {
+        setPatient(user);
+        setIsLoggedIn(true);
+      } else {
+        router.push('/login');
+      }
+    } else {
+      router.push('/login');
+    }
+  }, [router]);
+
   const fetchAppointments = useCallback(async () => {
+    if (!patient) return;
+
     setIsLoading(true);
-    // In a real app, you'd get the patient ID from the session/auth context
-    const patientId = SIMULATED_LOGGED_IN_PATIENT.id; 
     try {
-        const patientAppointments = await listAppointmentsByPatient(patientId);
+        const patientAppointments = await listAppointmentsByPatient(patient.id);
         setAppointments(patientAppointments);
     } catch (error) {
         console.error("Failed to fetch patient's appointments:", error);
@@ -53,14 +65,17 @@ export default function PatientAppointmentsPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, patient]);
   
   useEffect(() => {
-    fetchAppointments();
-  }, [fetchAppointments]);
+    if (patient) {
+      fetchAppointments();
+    }
+  }, [patient, fetchAppointments]);
 
 
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false);
     router.push('/');
   };

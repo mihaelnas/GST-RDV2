@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -19,6 +20,8 @@ import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { listAppointmentsByDoctor } from '@/ai/flows/appointmentManagementFlow';
+import type { LoginOutput } from '@/ai/schemas/authSchemas';
+
 
 const prescriptionSchema = z.object({
   patientId: z.string().min(1, { message: "Veuillez sélectionner un patient." }),
@@ -47,21 +50,35 @@ interface Prescription {
 // For now, we keep them in memory but fetch the patient list dynamically.
 const initialPrescriptions: Prescription[] = [];
 
-// In a real app, this would come from an auth context after login.
-const CURRENT_DOCTOR_ID = 'a1b2c3d4-e5f6-7890-1234-567890abcdef'; // Dr. Alice Martin's ID from schema.sql
-
 export default function DoctorPrescriptionsPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoggedIn, setIsLoggedIn] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [doctor, setDoctor] = useState<LoginOutput | null>(null);
   const [prescriptions, setPrescriptions] = useState<Prescription[]>(initialPrescriptions);
   const [doctorPatients, setDoctorPatients] = useState<PatientInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  useEffect(() => {
+    const userJson = sessionStorage.getItem('loggedInUser');
+    if (userJson) {
+      const user = JSON.parse(userJson);
+      if (user.role === 'doctor') {
+        setDoctor(user);
+        setIsLoggedIn(true);
+      } else {
+        router.push('/login');
+      }
+    } else {
+      router.push('/login');
+    }
+  }, [router]);
+
   const fetchDoctorPatients = useCallback(async () => {
+    if (!doctor) return;
     setIsLoading(true);
     try {
-        const appointments = await listAppointmentsByDoctor(CURRENT_DOCTOR_ID);
+        const appointments = await listAppointmentsByDoctor(doctor.id);
         const uniquePatients = Array.from(new Map(appointments.map(app => [app.patientId, { id: app.patientId, name: app.patientName }])).values());
         setDoctorPatients(uniquePatients);
     } catch (error) {
@@ -70,17 +87,20 @@ export default function DoctorPrescriptionsPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, doctor]);
 
   useEffect(() => {
-    fetchDoctorPatients();
-  }, [fetchDoctorPatients]);
+    if (doctor) {
+      fetchDoctorPatients();
+    }
+  }, [doctor, fetchDoctorPatients]);
 
   const { control, register, handleSubmit, formState: { errors }, reset } = useForm<PrescriptionFormValues>({
     resolver: zodResolver(prescriptionSchema),
   });
 
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false);
     router.push('/');
   };

@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -11,9 +12,8 @@ import { Users, ArrowLeft, Eye, Search, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { listAppointmentsByDoctor, type BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
+import type { LoginOutput } from '@/ai/schemas/authSchemas';
 
-// This would come from an auth context in a real app
-const CURRENT_DOCTOR_ID = 'a1b2c3d4-e5f6-7890-1234-567890abcdef'; // Dr. Alice Martin's ID from schema.sql
 
 interface PatientInfo {
   id: string;
@@ -23,15 +23,32 @@ interface PatientInfo {
 export default function DoctorPatientsPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [isLoggedIn, setIsLoggedIn] = useState(true); 
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [doctor, setDoctor] = useState<LoginOutput | null>(null);
   const [patients, setPatients] = useState<PatientInfo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
 
+  useEffect(() => {
+    const userJson = sessionStorage.getItem('loggedInUser');
+    if (userJson) {
+      const user = JSON.parse(userJson);
+      if (user.role === 'doctor') {
+        setDoctor(user);
+        setIsLoggedIn(true);
+      } else {
+        router.push('/login');
+      }
+    } else {
+      router.push('/login');
+    }
+  }, [router]);
+
   const fetchDoctorPatients = useCallback(async () => {
+    if (!doctor) return;
     setIsLoading(true);
     try {
-        const appointments = await listAppointmentsByDoctor(CURRENT_DOCTOR_ID);
+        const appointments = await listAppointmentsByDoctor(doctor.id);
         // Deduplicate patients from the appointments list
         const uniquePatients = Array.from(new Map(appointments.map(app => [app.patientId, { id: app.patientId, name: app.patientName }])).values());
         setPatients(uniquePatients);
@@ -41,13 +58,16 @@ export default function DoctorPatientsPage() {
     } finally {
         setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, doctor]);
 
   useEffect(() => {
-    fetchDoctorPatients();
-  }, [fetchDoctorPatients]);
+    if (doctor) {
+      fetchDoctorPatients();
+    }
+  }, [doctor, fetchDoctorPatients]);
 
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false);
     router.push('/');
   };
