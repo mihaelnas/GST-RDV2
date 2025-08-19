@@ -10,7 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 const AppointmentNotificationInputSchema = z.object({
@@ -18,7 +18,7 @@ const AppointmentNotificationInputSchema = z.object({
   patientEmail: z.string().email(),
   doctorName: z.string(),
   doctorEmail: z.string().email(),
-  appointmentDateTime: z.date(),
+  appointmentDateTime: z.string().datetime(),
   appointmentId: z.string().optional(), // Optional: for reference
 });
 export type AppointmentNotificationInput = z.infer<typeof AppointmentNotificationInputSchema>;
@@ -35,7 +35,7 @@ const sendPatientConfirmationEmailFlow = ai.defineFlow(
     outputSchema: NotificationOutputSchema,
   },
   async (input) => {
-    const formattedDateTime = format(input.appointmentDateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr });
+    const formattedDateTime = format(parseISO(input.appointmentDateTime), "eeee d MMMM yyyy 'à' HH:mm", { locale: fr });
     // Simulate email sending
     console.log(`SIMULATION: Sending patient confirmation email to ${input.patientEmail}`);
     console.log(`Subject: Confirmation de votre rendez-vous le ${formattedDateTime}`);
@@ -70,7 +70,7 @@ const sendDoctorAppointmentNotificationEmailFlow = ai.defineFlow(
     outputSchema: NotificationOutputSchema,
   },
   async (input) => {
-    const formattedDateTime = format(input.appointmentDateTime, "eeee d MMMM yyyy 'à' HH:mm", { locale: fr });
+    const formattedDateTime = format(parseISO(input.appointmentDateTime), "eeee d MMMM yyyy 'à' HH:mm", { locale: fr });
     // Simulate email sending
     console.log(`SIMULATION: Sending doctor notification email to ${input.doctorEmail}`);
     console.log(`Subject: Nouveau rendez-vous le ${formattedDateTime} avec ${input.patientName}`);
