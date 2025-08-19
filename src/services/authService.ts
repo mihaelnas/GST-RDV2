@@ -17,6 +17,7 @@ type UserRecord = {
 /**
  * Authenticates a user by checking their email and password against the database.
  * It searches for the user across all relevant tables and then validates the password.
+ * This function now correctly handles database client release to prevent connection pool exhaustion.
  * @param {string} email - The user's email.
  * @param {string} password - The user's password.
  * @returns {Promise<LoginOutput>} The user's data and role.
@@ -71,6 +72,8 @@ export async function authenticateUser(email: string, password: string): Promise
     // For any other unexpected errors (e.g., database connection issue)
     throw new Error('Une erreur est survenue lors de la tentative de connexion.');
   } finally {
+    // CRITICAL: Always release the client back to the pool in a finally block
+    // to prevent connection leaks, which can exhaust the pool and crash the app.
     client.release();
   }
 }
