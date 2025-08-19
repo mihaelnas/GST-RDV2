@@ -29,7 +29,7 @@ export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]>
     const result = await pool.query(query);
     return result.rows.map(row => ({
       id: row.id,
-      dateTime: row.date.toISOString(),
+      dateTime: new Date(row.date).toISOString(),
       patientId: row.patient_id,
       patientName: row.patient_name || 'Patient Supprimé',
       doctorId: row.doctor_id,
@@ -62,7 +62,7 @@ export async function getAppointmentsByDoctorId(doctorId: string): Promise<Booke
         const result = await pool.query(query);
         return result.rows.map(row => ({
             id: row.id,
-            dateTime: row.date.toISOString(),
+            dateTime: new Date(row.date).toISOString(),
             patientId: row.patient_id,
             patientName: row.patient_name || 'Patient Supprimé',
             doctorId: row.doctor_id,
@@ -94,7 +94,7 @@ export async function getAppointmentsByPatientId(patientId: string): Promise<Boo
         const result = await pool.query(query);
         return result.rows.map(row => ({
             id: row.id,
-            dateTime: row.date.toISOString(),
+            dateTime: new Date(row.date).toISOString(),
             patientId: row.patient_id,
             patientName: row.patient_name,
             doctorId: row.doctor_id,
@@ -139,7 +139,7 @@ export async function createAppointment(data: Omit<AppointmentCreateInput, 'date
 
     return {
       id: newAppointment.id,
-      dateTime: newAppointment.date.toISOString(),
+      dateTime: new Date(newAppointment.date).toISOString(),
       patientId: newAppointment.patient_id,
       patientName: names.patient_name,
       doctorId: newAppointment.doctor_id,
