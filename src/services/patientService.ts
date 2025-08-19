@@ -119,8 +119,8 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
 
 
 /**
- * Deletes a patient by their ID, after checking for future appointments.
- * Past appointments will have their patient_id set to NULL to preserve history.
+ * Deletes a patient by their ID using a transaction to ensure data integrity.
+ * It checks for future appointments and dissociates past appointments before deletion.
  * @param {string} id - The ID of the patient to delete.
  * @returns {Promise<boolean>} A promise that resolves to true if deletion was successful.
  */
@@ -128,8 +128,15 @@ export async function deletePatientById(id: string): Promise<boolean> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    
+    // Step 1: Verify the patient exists. If not, no need to proceed.
+    const patientExistsResult = await client.query('SELECT 1 FROM patients WHERE id = $1', [id]);
+    if (patientExistsResult.rowCount === 0) {
+      await client.query('ROLLBACK');
+      return false; // Or throw new Error('Patient not found.') depending on desired behavior
+    }
 
-    // Check for future appointments for this patient
+    // Step 2: Check for future appointments for this patient
     const appointmentCheck = await client.query(
         'SELECT 1 FROM appointments WHERE patient_id = $1 AND date_time >= NOW() LIMIT 1',
         [id]
@@ -139,13 +146,13 @@ export async function deletePatientById(id: string): Promise<boolean> {
       throw new Error('Impossible de supprimer le patient. Il a des rendez-vous futurs.');
     }
 
-    // Set patient_id to NULL for past appointments to preserve history
+    // Step 3: Dissociate past appointments from the patient to preserve history
     await client.query(
-        'UPDATE appointments SET patient_id = NULL WHERE patient_id = $1 AND date_time < NOW()',
+        'UPDATE appointments SET patient_id = NULL WHERE patient_id = $1',
         [id]
     );
 
-    // Proceed with deletion of the patient
+    // Step 4: Proceed with deletion of the patient
     const deleteResult = await client.query('DELETE FROM patients WHERE id = $1', [id]);
     
     await client.query('COMMIT');
