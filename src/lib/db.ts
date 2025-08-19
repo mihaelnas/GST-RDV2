@@ -33,9 +33,7 @@ if (!process.env.POSTGRES_URL) {
     // This is the definitive fix for character encoding issues.
     // It ensures that every new client connection from the pool will use UTF8.
     pool.on('connect', (client) => {
-        console.log('A client has connected, setting encoding to UTF8.');
         client.query('SET client_encoding TO \'UTF8\'')
-            .then(() => console.log('Client encoding set to UTF8.'))
             .catch(err => console.error('Error setting client encoding', err));
     });
 
