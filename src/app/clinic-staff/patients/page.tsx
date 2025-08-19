@@ -59,7 +59,6 @@ export default function PatientsListPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'add' | 'edit'>('add');
   const [patientToEdit, setPatientToEdit] = useState<Patient | null>(null);
-  const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
 
   const { register, handleSubmit, formState: { errors }, reset, clearErrors } = useForm<PatientFormValues>({
     resolver: zodResolver(patientFormSchema),
@@ -94,6 +93,7 @@ export default function PatientsListPage() {
   ).sort((a, b) => a.fullName.localeCompare(b.fullName)), [patients, searchTerm]);
 
   const openModal = (mode: 'add' | 'edit', patient?: Patient) => {
+    clearErrors();
     setModalMode(mode);
     if (mode === 'add') {
       reset({ fullName: '', email: '', password: '' });
@@ -107,7 +107,6 @@ export default function PatientsListPage() {
         password: '',
       });
     }
-    clearErrors();
     setIsModalOpen(true);
   };
   
