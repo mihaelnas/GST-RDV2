@@ -117,8 +117,8 @@ export async function updateDoctorById(id: string, data: DoctorUpdateInput): Pro
         };
     } catch (error) {
         console.error('Database Error in updateDoctorById:', error);
-        if ((error as any).code === '23505') {
-            throw new Error('Un médecin avec cet e-mail existe déjà.');
+        if ((error as any).code === '23505') { // Unique constraint violation
+            throw new Error('Un autre médecin utilise déjà cet e-mail.');
         }
         throw new Error('Failed to update doctor.');
     }
