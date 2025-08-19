@@ -143,15 +143,14 @@ export async function deleteDoctorById(id: string): Promise<boolean> {
     );
 
     if (appointmentCheck.rowCount > 0) {
+        // This is the specific error condition we want to report to the user.
         throw new Error('Impossible de supprimer le médecin. Il a des rendez-vous futurs.');
     }
 
     // To preserve history, we can set doctor_id to NULL for past appointments
     // instead of deleting them. This prevents orphaned records if a foreign key constraint is strict.
-    // Note: The table must allow NULL for doctor_id for this to work.
-    // If the schema requires a doctor_id, you might choose to delete or archive instead.
     await client.query(
-        'UPDATE appointments SET doctor_id = NULL WHERE doctor_id = $1 AND date_time < NOW()',
+        'UPDATE appointments SET doctor_id = NULL WHERE doctor_id = $1',
         [id]
     );
 

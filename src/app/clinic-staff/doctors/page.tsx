@@ -50,13 +50,13 @@ const doctorAddSchema = z.object({
 
 // Schema for editing a doctor
 const doctorEditSchema = z.object({
-  id: z.string(),
   fullName: z.string().min(3, { message: "Le nom complet est requis (min 3 caractères)." }),
   specialty: z.string().min(3, { message: "La spécialité est requise (min 3 caractères)." }),
   email: z.string().email({ message: "Adresse e-mail invalide." }),
 });
 
-type DoctorFormValues = z.infer<typeof doctorAddSchema> & Partial<z.infer<typeof doctorEditSchema>>;
+type DoctorAddFormValues = z.infer<typeof doctorAddSchema>;
+type DoctorEditFormValues = z.infer<typeof doctorEditSchema>;
 
 
 export default function DoctorsListPage() {
@@ -72,7 +72,16 @@ export default function DoctorsListPage() {
   const [doctorToEdit, setDoctorToEdit] = useState<Doctor | null>(null);
   const [doctorToDelete, setDoctorToDelete] = useState<Doctor | null>(null);
 
-  const { register, handleSubmit, formState: { errors }, reset, clearErrors, trigger, getValues } = useForm<DoctorFormValues>();
+  const addForm = useForm<DoctorAddFormValues>({
+    resolver: zodResolver(doctorAddSchema),
+    defaultValues: { fullName: '', specialty: '', email: '', password: '' },
+  });
+
+  const editForm = useForm<DoctorEditFormValues>({
+    resolver: zodResolver(doctorEditSchema),
+    defaultValues: { fullName: '', specialty: '', email: '' },
+  });
+
 
   const fetchDoctors = useCallback(async () => {
     setIsLoading(true);
@@ -104,38 +113,22 @@ export default function DoctorsListPage() {
   ).sort((a, b) => a.fullName.localeCompare(b.fullName)), [doctors, searchTerm]);
 
   const openAddModal = () => {
-    reset({ fullName: '', specialty: '', email: '', password: '' });
-    clearErrors();
+    addForm.reset();
     setIsAddModalOpen(true);
   };
 
   const openEditModal = (doctor: Doctor) => {
     setDoctorToEdit(doctor);
-    reset({ 
-      id: doctor.id,
+    editForm.reset({ 
       fullName: doctor.fullName,
       specialty: doctor.specialty,
       email: doctor.email,
     });
-    clearErrors();
     setIsEditModalOpen(true);
   };
   
-  const onAddSubmit: SubmitHandler<DoctorFormValues> = async (data) => {
-    const isValid = await trigger(["fullName", "specialty", "email", "password"]);
-    if (!isValid) return;
-
-    if (!data.password) {
-        toast({ title: "Erreur", description: "Le mot de passe est requis.", variant: "destructive" });
-        return;
-    }
-    
-    const createInput: DoctorCreateInput = {
-      fullName: data.fullName,
-      specialty: data.specialty,
-      email: data.email,
-      password: data.password,
-    };
+  const onAddSubmit: SubmitHandler<DoctorAddFormValues> = async (data) => {
+    const createInput: DoctorCreateInput = data;
     try {
       await addDoctor(createInput);
       toast({ title: "Médecin Ajouté", description: `Le Dr. ${data.fullName} a été ajouté avec succès.`, className: "bg-accent text-accent-foreground"});
@@ -147,15 +140,10 @@ export default function DoctorsListPage() {
     }
   };
 
-  const onEditSubmit: SubmitHandler<DoctorFormValues> = async (data) => {
-    const isValid = await trigger(["fullName", "specialty", "email"]);
-    if (!isValid || !doctorToEdit) return;
+  const onEditSubmit: SubmitHandler<DoctorEditFormValues> = async (data) => {
+    if (!doctorToEdit) return;
     
-    const updateData: DoctorUpdateInput = {
-        fullName: data.fullName,
-        specialty: data.specialty,
-        email: data.email,
-    };
+    const updateData: DoctorUpdateInput = data;
 
     try {
       await updateDoctor(doctorToEdit.id, updateData);
@@ -239,7 +227,7 @@ export default function DoctorsListPage() {
                         <Button variant="outline" size="sm" onClick={() => openEditModal(doctor)} title="Modifier">
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <AlertDialog open={doctorToDelete?.id === doctor.id} onOpenChange={(isOpen) => !isOpen && setDoctorToDelete(null)}>
+                        <AlertDialog open={!!doctorToDelete && doctorToDelete.id === doctor.id} onOpenChange={(isOpen) => !isOpen && setDoctorToDelete(null)}>
                           <AlertDialogTrigger asChild>
                               <Button variant="destructive" size="sm" title="Supprimer" onClick={() => setDoctorToDelete(doctor)}>
                                   <Trash2 className="h-4 w-4" />
@@ -249,7 +237,7 @@ export default function DoctorsListPage() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Êtes-vous sûr de vouloir supprimer le Dr. {doctor.fullName} ? Cette action est irréversible et dissociera tous ses rendez-vous passés.
+                                Êtes-vous sûr de vouloir supprimer le Dr. {doctor.fullName} ? Cette action est irréversible.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooterComponent>
@@ -290,26 +278,26 @@ export default function DoctorsListPage() {
             <DialogTitle className="text-2xl font-headline flex items-center"><UserPlus className="mr-2 h-6 w-6 text-primary"/>Ajouter un Nouveau Médecin</DialogTitle>
             <DialogDescription>Remplissez les informations pour créer un compte médecin.</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSubmit(onAddSubmit)} className="space-y-4 py-4">
+          <form onSubmit={addForm.handleSubmit(onAddSubmit)} className="space-y-4 py-4">
             <div>
               <Label htmlFor="addFullName">Nom complet</Label>
-              <Input id="addFullName" {...register("fullName")} placeholder="Dr. Jean Dupont" />
-              {errors.fullName && <p className="text-sm text-destructive mt-1">{errors.fullName.message}</p>}
+              <Input id="addFullName" {...addForm.register("fullName")} placeholder="Dr. Jean Dupont" />
+              {addForm.formState.errors.fullName && <p className="text-sm text-destructive mt-1">{addForm.formState.errors.fullName.message}</p>}
             </div>
             <div>
               <Label htmlFor="addSpecialty">Spécialité</Label>
-              <Input id="addSpecialty" {...register("specialty")} placeholder="Cardiologie" />
-              {errors.specialty && <p className="text-sm text-destructive mt-1">{errors.specialty.message}</p>}
+              <Input id="addSpecialty" {...addForm.register("specialty")} placeholder="Cardiologie" />
+              {addForm.formState.errors.specialty && <p className="text-sm text-destructive mt-1">{addForm.formState.errors.specialty.message}</p>}
             </div>
             <div>
               <Label htmlFor="addEmail">Adresse e-mail</Label>
-              <Input id="addEmail" type="email" {...register("email")} placeholder="medecin@example.com" />
-              {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
+              <Input id="addEmail" type="email" {...addForm.register("email")} placeholder="medecin@example.com" />
+              {addForm.formState.errors.email && <p className="text-sm text-destructive mt-1">{addForm.formState.errors.email.message}</p>}
             </div>
             <div>
               <Label htmlFor="addPassword">Mot de passe (provisoire)</Label>
-              <Input id="addPassword" type="password" {...register("password")} placeholder="********" />
-              {errors.password && <p className="text-sm text-destructive mt-1">{errors.password.message}</p>}
+              <Input id="addPassword" type="password" {...addForm.register("password")} placeholder="********" />
+              {addForm.formState.errors.password && <p className="text-sm text-destructive mt-1">{addForm.formState.errors.password.message}</p>}
             </div>
             <DialogFooter>
               <DialogClose asChild>
@@ -322,40 +310,39 @@ export default function DoctorsListPage() {
       </Dialog>
 
       {/* Edit Doctor Modal */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
-        <DialogContent className="sm:max-w-[525px]">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-headline flex items-center"><Edit className="mr-2 h-6 w-6 text-primary"/>Modifier le Profil Médecin</DialogTitle>
-            <DialogDescription>Mettez à jour les informations du Dr. {doctorToEdit?.fullName}.</DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmit(onEditSubmit)} className="space-y-4 py-4">
-            <input type="hidden" {...register("id")} />
-            <div>
-              <Label htmlFor="editFullName">Nom complet</Label>
-              <Input id="editFullName" {...register("fullName")} />
-              {errors.fullName && <p className="text-sm text-destructive mt-1">{errors.fullName.message}</p>}
-            </div>
-            <div>
-              <Label htmlFor="editSpecialty">Spécialité</Label>
-              <Input id="editSpecialty" {...register("specialty")} />
-              {errors.specialty && <p className="text-sm text-destructive mt-1">{errors.specialty.message}</p>}
-            </div>
-            <div>
-              <Label htmlFor="editEmail">Adresse e-mail</Label>
-              <Input id="editEmail" type="email" {...register("email")} />
-              {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
-            </div>
-            <DialogFooter>
-               <DialogClose asChild>
-                <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>Annuler</Button>
-              </DialogClose>
-              <Button type="submit">Enregistrer</Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      {doctorToEdit && (
+        <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+          <DialogContent className="sm:max-w-[525px]">
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-headline flex items-center"><Edit className="mr-2 h-6 w-6 text-primary"/>Modifier le Profil Médecin</DialogTitle>
+              <DialogDescription>Mettez à jour les informations du Dr. {doctorToEdit?.fullName}.</DialogDescription>
+            </DialogHeader>
+            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="editFullName">Nom complet</Label>
+                <Input id="editFullName" {...editForm.register("fullName")} />
+                {editForm.formState.errors.fullName && <p className="text-sm text-destructive mt-1">{editForm.formState.errors.fullName.message}</p>}
+              </div>
+              <div>
+                <Label htmlFor="editSpecialty">Spécialité</Label>
+                <Input id="editSpecialty" {...editForm.register("specialty")} />
+                {editForm.formState.errors.specialty && <p className="text-sm text-destructive mt-1">{editForm.formState.errors.specialty.message}</p>}
+              </div>
+              <div>
+                <Label htmlFor="editEmail">Adresse e-mail</Label>
+                <Input id="editEmail" type="email" {...editForm.register("email")} />
+                {editForm.formState.errors.email && <p className="text-sm text-destructive mt-1">{editForm.formState.errors.email.message}</p>}
+              </div>
+              <DialogFooter>
+                 <DialogClose asChild>
+                  <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>Annuler</Button>
+                </DialogClose>
+                <Button type="submit">Enregistrer</Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
-
-    
