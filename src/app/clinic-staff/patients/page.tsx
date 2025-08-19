@@ -45,15 +45,14 @@ const patientAddSchema = z.object({
   email: z.string().email({ message: "Adresse e-mail invalide." }),
   password: z.string().min(6, { message: "Le mot de passe doit contenir au moins 6 caractères." }),
 });
-type PatientAddFormValues = z.infer<typeof patientAddSchema>;
 
 const patientEditSchema = z.object({
     id: z.string(),
     fullName: z.string().min(3, { message: "Le nom complet est requis (min 3 caractères)." }),
     email: z.string().email({ message: "Adresse e-mail invalide." }),
 });
-type PatientEditFormValues = z.infer<typeof patientEditSchema>;
 
+type PatientFormValues = z.infer<typeof patientAddSchema> & Partial<z.infer<typeof patientEditSchema>>;
 
 export default function PatientsListPage() {
   const router = useRouter();
@@ -65,16 +64,10 @@ export default function PatientsListPage() {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [patientToDelete, setPatientToDelete] = useState<Patient | null>(null);
   const [patientToEdit, setPatientToEdit] = useState<Patient | null>(null);
 
-  const addForm = useForm<PatientAddFormValues>({
-    resolver: zodResolver(patientAddSchema),
-    defaultValues: { fullName: '', email: '', password: '' },
-  });
-
-  const editForm = useForm<PatientEditFormValues>({
-    resolver: zodResolver(patientEditSchema),
-  });
+  const { register, handleSubmit, formState: { errors }, reset, clearErrors, trigger } = useForm<PatientFormValues>();
 
   const fetchPatients = useCallback(async () => {
     setIsLoading(true);
@@ -105,28 +98,37 @@ export default function PatientsListPage() {
   ).sort((a, b) => a.fullName.localeCompare(b.fullName)), [patients, searchTerm]);
 
   const openAddModal = () => {
-    addForm.reset();
-    addForm.clearErrors();
+    reset({ fullName: '', email: '', password: '' });
+    clearErrors();
     setIsAddModalOpen(true);
   };
 
   const openEditModal = (patient: Patient) => {
     setPatientToEdit(patient);
-    editForm.reset({
+    reset({
         id: patient.id,
         fullName: patient.fullName,
         email: patient.email,
     });
-    editForm.clearErrors();
+    clearErrors();
     setIsEditModalOpen(true);
   };
   
-  const onAddSubmit: SubmitHandler<PatientAddFormValues> = async (data) => {
+  const onAddSubmit: SubmitHandler<PatientFormValues> = async (data) => {
+     const validationResult = await trigger(["fullName", "email", "password"]);
+     if (!validationResult) return;
+
+    if (!data.password) {
+        toast({ title: "Erreur", description: "Le mot de passe est obligatoire.", variant: "destructive"});
+        return;
+    }
+
     const createInput: PatientCreateInput = {
       fullName: data.fullName,
       email: data.email,
       password: data.password,
     };
+
     try {
       await addPatient(createInput);
       toast({ title: "Patient Ajouté", description: `Le patient ${data.fullName} a été ajouté avec succès.`, className: "bg-accent text-accent-foreground" });
@@ -138,8 +140,9 @@ export default function PatientsListPage() {
     }
   };
 
-  const onEditSubmit: SubmitHandler<PatientEditFormValues> = async (data) => {
-    if (!patientToEdit) return;
+  const onEditSubmit: SubmitHandler<PatientFormValues> = async (data) => {
+    const validationResult = await trigger(["fullName", "email"]);
+    if (!validationResult || !patientToEdit) return;
 
     const updateData: PatientUpdateInput = {
       fullName: data.fullName,
@@ -170,6 +173,8 @@ export default function PatientsListPage() {
     } catch (error: any) {
       console.error("Failed to delete patient:", error);
       toast({ title: "Erreur", description: error.message || "Une erreur s'est produite lors de la suppression.", variant: "destructive" });
+    } finally {
+      setPatientToDelete(null);
     }
   };
 
@@ -224,9 +229,9 @@ export default function PatientsListPage() {
                         <Button variant="outline" size="sm" onClick={() => openEditModal(patient)} title="Modifier">
                           <Edit className="h-4 w-4" />
                         </Button>
-                         <AlertDialog>
+                         <AlertDialog open={patientToDelete?.id === patient.id} onOpenChange={(isOpen) => !isOpen && setPatientToDelete(null)}>
                             <AlertDialogTrigger asChild>
-                               <Button variant="destructive" size="sm" title="Supprimer">
+                               <Button variant="destructive" size="sm" title="Supprimer" onClick={() => setPatientToDelete(patient)}>
                                   <Trash2 className="h-4 w-4" />
                                </Button>
                             </AlertDialogTrigger>
@@ -238,7 +243,7 @@ export default function PatientsListPage() {
                                        </AlertDialogDescription>
                                    </AlertDialogHeader>
                                    <AlertDialogFooterComponent>
-                                       <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                       <AlertDialogCancel onClick={() => setPatientToDelete(null)}>Annuler</AlertDialogCancel>
                                        <AlertDialogAction onClick={() => handleDeletePatient(patient)} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
                                    </AlertDialogFooterComponent>
                                </AlertDialogContent>
@@ -280,25 +285,25 @@ export default function PatientsListPage() {
                 Remplissez les informations pour créer un compte patient.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={addForm.handleSubmit(onAddSubmit)} className="space-y-4 py-4">
+            <form onSubmit={handleSubmit(onAddSubmit)} className="space-y-4 py-4">
                 <div>
                   <Label htmlFor="addFullName">Nom complet</Label>
-                  <Input id="addFullName" {...addForm.register("fullName")} placeholder="Nom Prénom" />
-                  {addForm.formState.errors.fullName && <p className="text-sm text-destructive mt-1">{addForm.formState.errors.fullName.message}</p>}
+                  <Input id="addFullName" {...register("fullName")} placeholder="Nom Prénom" />
+                  {errors.fullName && <p className="text-sm text-destructive mt-1">{errors.fullName.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="addEmail">Adresse e-mail</Label>
-                  <Input id="addEmail" type="email" {...addForm.register("email")} placeholder="patient@example.com" />
-                  {addForm.formState.errors.email && <p className="text-sm text-destructive mt-1">{addForm.formState.errors.email.message}</p>}
+                  <Input id="addEmail" type="email" {...register("email")} placeholder="patient@example.com" />
+                  {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
                 </div>
                 <div>
                   <Label htmlFor="addPassword">Mot de passe (provisoire)</Label>
-                  <Input id="addPassword" type="password" {...addForm.register("password")} placeholder="********" />
-                  {addForm.formState.errors.password && <p className="text-sm text-destructive mt-1">{addForm.formState.errors.password.message}</p>}
+                  <Input id="addPassword" type="password" {...register("password")} placeholder="********" />
+                  {errors.password && <p className="text-sm text-destructive mt-1">{errors.password.message}</p>}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
-                        <Button type="button" variant="outline">Annuler</Button>
+                        <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>Annuler</Button>
                     </DialogClose>
                     <Button type="submit">Créer le compte</Button>
                 </DialogFooter>
@@ -318,21 +323,21 @@ export default function PatientsListPage() {
                 Mettez à jour les informations de {patientToEdit?.fullName}.
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={editForm.handleSubmit(onEditSubmit)} className="space-y-4 py-4">
-                <input type="hidden" {...editForm.register("id")} />
+            <form onSubmit={handleSubmit(onEditSubmit)} className="space-y-4 py-4">
+                <input type="hidden" {...register("id")} />
                 <div>
                     <Label htmlFor="editFullName">Nom complet</Label>
-                    <Input id="editFullName" {...editForm.register("fullName")} />
-                    {editForm.formState.errors.fullName && <p className="text-sm text-destructive mt-1">{editForm.formState.errors.fullName.message}</p>}
+                    <Input id="editFullName" {...register("fullName")} />
+                    {errors.fullName && <p className="text-sm text-destructive mt-1">{errors.fullName.message}</p>}
                 </div>
                 <div>
                     <Label htmlFor="editEmail">Adresse e-mail</Label>
-                    <Input id="editEmail" type="email" {...editForm.register("email")} />
-                    {editForm.formState.errors.email && <p className="text-sm text-destructive mt-1">{editForm.formState.errors.email.message}</p>}
+                    <Input id="editEmail" type="email" {...register("email")} />
+                    {errors.email && <p className="text-sm text-destructive mt-1">{errors.email.message}</p>}
                 </div>
                 <DialogFooter>
                     <DialogClose asChild>
-                        <Button type="button" variant="outline">Annuler</Button>
+                        <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>Annuler</Button>
                     </DialogClose>
                     <Button type="submit">Enregistrer</Button>
                 </DialogFooter>
@@ -342,4 +347,3 @@ export default function PatientsListPage() {
     </div>
   );
 }
-
