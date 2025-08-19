@@ -267,12 +267,19 @@ export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: Ap
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={selectedDate} onSelect={(date) => {
-                        if (date) {
-                            if (startOfDay(date) >= startOfDay(new Date())) { setSelectedDate(date); setPopoverOpen(false); } 
-                            else { toast({ title: "Date non valide", description: "Veuillez sélectionner une date future ou aujourd'hui.", variant: "destructive" }); }
-                        }
-                    }} disabled={(date) => isPast(date) && !isEqual(startOfDay(date), startOfDay(new Date()))} initialFocus locale={fr}/>
+                    <Calendar 
+                        mode="single" 
+                        selected={selectedDate} 
+                        onSelect={(date) => {
+                            if (date) { // Only update if a date is selected, preventing undefined.
+                                setSelectedDate(date);
+                                setPopoverOpen(false);
+                            }
+                        }}
+                        disabled={(date) => isPast(date) && !isEqual(startOfDay(date), startOfDay(new Date()))} 
+                        initialFocus 
+                        locale={fr}
+                    />
                 </PopoverContent>
                 </Popover>
             </div>

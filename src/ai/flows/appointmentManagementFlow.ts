@@ -7,6 +7,9 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import * as AppointmentService from '@/services/appointmentService';
 
+const ValidStatusSchema = z.enum(['En attente', 'Confirmé', 'Annulé', 'Payée']);
+export type AppointmentStatus = z.infer<typeof ValidStatusSchema>;
+
 // Schema for detailed appointment info, including patient and doctor names
 const AppointmentDetailsSchema = z.object({
   id: z.string(),
@@ -15,7 +18,7 @@ const AppointmentDetailsSchema = z.object({
   patientName: z.string(),
   doctorId: z.string(),
   doctorName: z.string(),
-  status: z.enum(['En attente', 'Confirmé', 'Annulé', 'Payée']),
+  status: ValidStatusSchema,
   durationMinutes: z.number(),
 });
 export type AppointmentDetails = z.infer<typeof AppointmentDetailsSchema>;
@@ -28,7 +31,7 @@ const BookedAppointmentSchema = z.object({
     patientName: z.string(),
     doctorId: z.string(),
     doctorName: z.string(),
-    status: z.string(),
+    status: ValidStatusSchema,
 });
 export type BookedAppointment = z.infer<typeof BookedAppointmentSchema>;
 
@@ -111,7 +114,7 @@ const updateAppointmentStatusFlow = ai.defineFlow(
     name: 'updateAppointmentStatusFlow',
     inputSchema: z.object({ 
         appointmentId: z.string(), 
-        status: z.enum(['En attente', 'Confirmé', 'Annulé', 'Payée']) 
+        status: ValidStatusSchema 
     }),
     outputSchema: z.boolean(),
   },
@@ -119,7 +122,7 @@ const updateAppointmentStatusFlow = ai.defineFlow(
     return AppointmentService.updateAppointmentStatus(appointmentId, status);
   }
 );
-export async function updateAppointmentStatus(appointmentId: string, status: 'En attente' | 'Confirmé' | 'Annulé' | 'Payée'): Promise<boolean> {
+export async function updateAppointmentStatus(appointmentId: string, status: AppointmentStatus): Promise<boolean> {
   return updateAppointmentStatusFlow({ appointmentId, status });
 }
 
