@@ -148,9 +148,8 @@ export async function deleteDoctorById(id: string): Promise<boolean> {
     }
 
     // To preserve history, we set doctor_id to NULL for past appointments.
-    // We assume appointments table allows NULL on doctor_id for this archival purpose.
     await client.query(
-        'UPDATE appointments SET doctor_id = NULL WHERE doctor_id = $1',
+        'UPDATE appointments SET doctor_id = NULL WHERE doctor_id = $1 AND date < NOW()',
         [id]
     );
 

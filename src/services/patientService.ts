@@ -129,14 +129,12 @@ export async function deletePatientById(id: string): Promise<boolean> {
   try {
     await client.query('BEGIN');
     
-    // Step 1: Verify the patient exists. If not, no need to proceed.
     const patientExistsResult = await client.query('SELECT 1 FROM patients WHERE id = $1', [id]);
     if (patientExistsResult.rowCount === 0) {
       await client.query('ROLLBACK');
-      return false; // Or throw new Error('Patient not found.') depending on desired behavior
+      return false; 
     }
 
-    // Step 2: Check for future appointments for this patient
     const appointmentCheck = await client.query(
         'SELECT 1 FROM appointments WHERE patient_id = $1 AND date >= NOW() LIMIT 1',
         [id]
@@ -146,14 +144,11 @@ export async function deletePatientById(id: string): Promise<boolean> {
       throw new Error('Impossible de supprimer le patient. Il a des rendez-vous futurs.');
     }
 
-    // Step 3: Dissociate past appointments from the patient to preserve history.
-    // We assume the appointments table allows patient_id to be NULL for archival.
     await client.query(
-        'UPDATE appointments SET patient_id = NULL WHERE patient_id = $1',
+        'UPDATE appointments SET patient_id = NULL WHERE patient_id = $1 AND date < NOW()',
         [id]
     );
 
-    // Step 4: Proceed with deletion of the patient
     const deleteResult = await client.query('DELETE FROM patients WHERE id = $1', [id]);
     
     await client.query('COMMIT');
