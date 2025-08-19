@@ -1,31 +1,61 @@
-
 # Firebase Studio
 
 This is a NextJS starter in Firebase Studio.
 
 ## Getting Started
 
-To run your full development environment, you will need two separate terminals.
+This project requires a local PostgreSQL database to be running.
 
-**Terminal 1: Start the Database**
-1. Run `docker-compose up`.
-2. This command starts the local PostgreSQL database service. Leave this terminal running.
+### 1. Install and Set Up PostgreSQL
 
-**Terminal 2: Start the Application**
-1. Run `npm run dev`.
-2. This command starts the Next.js application.
-3. Open [http://localhost:9002](http://localhost:9002) in your browser to see the result.
+First, you need to have PostgreSQL installed and running on your machine. You can download it from the [official PostgreSQL website](https://www.postgresql.org/download/).
 
-Your app in Terminal 2 will now be able to connect to the database running in Terminal 1.
+Once installed, you need to create a database and a user for the application. You can do this using `psql` or a graphical tool like pgAdmin.
 
-## About the Local Database
+Example using `psql`:
+```bash
+# Connect to PostgreSQL
+sudo -u postgres psql
 
-This project is configured to work with a local PostgreSQL database using Docker, which is managed by the `docker-compose.yml` file.
+# Create a new user (you will be prompted for a password)
+CREATE USER clinic_user WITH ENCRYPTED PASSWORD 'clinic_password';
 
-**Prerequisites:**
-- Docker must be installed and running on your machine.
+# Create the database and set the owner
+CREATE DATABASE clinic_db OWNER clinic_user;
 
-The first time you run `docker-compose up`, Docker will download the PostgreSQL image and create a local database pre-filled with the necessary tables and some sample data from the `init.sql` file.
+# Grant all privileges on the database to the new user
+GRANT ALL PRIVILEGES ON DATABASE clinic_db TO clinic_user;
 
-To stop the database, press `Ctrl + C` in the terminal where `docker-compose` is running.
-To remove the database container and all its data, run `docker-compose down -v`.
+# Exit psql
+\q
+```
+
+### 2. Set Up Environment Variables
+
+Create a new file named `.env` in the root of the project and add your database connection string. This URL is used by the application to connect to the database you just created.
+
+```
+POSTGRES_URL="postgresql://clinic_user:clinic_password@localhost:5432/clinic_db"
+```
+**Important**: Replace the user, password, and database name if you chose different ones.
+
+### 3. Initialize the Database Schema
+
+With your database running and your `.env` file created, you now need to create the tables and seed them with initial data.
+
+The `init.sql` file in the project root contains all the necessary SQL commands. You can execute this file using the `psql` command:
+
+```bash
+psql -U clinic_user -d clinic_db -f init.sql
+```
+You will be prompted for the `clinic_user` password you created earlier. This command will execute the script and set up all the tables (`doctors`, `patients`, `appointments`, etc.).
+
+### 4. Run the Application
+
+Now that your database is set up and running, you can start the Next.js application.
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:9002](http://localhost:9002) in your browser to see the result.
