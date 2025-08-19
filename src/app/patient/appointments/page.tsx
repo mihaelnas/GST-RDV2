@@ -24,7 +24,7 @@ import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { listAppointmentsByPatient, deleteAppointment, type BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
+import { listAppointmentsByPatient, cancelAppointment, type BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
 import type { LoginOutput } from '@/ai/schemas/authSchemas';
 
 
@@ -82,7 +82,7 @@ export default function PatientAppointmentsPage() {
 
   const handleCancelAppointment = async (appointmentId: string) => {
     try {
-      const result = await deleteAppointment(appointmentId);
+      const result = await cancelAppointment(appointmentId);
       if (result.success) {
         toast({
           title: "Rendez-vous Annulé",
@@ -91,7 +91,7 @@ export default function PatientAppointmentsPage() {
         });
         fetchAppointments(); // Refresh the list
       } else {
-        throw new Error(result.message || "La suppression a échoué silencieusement.");
+        throw new Error(result.message || "L'annulation a échoué silencieusement.");
       }
     } catch (error) {
       console.error("Failed to cancel appointment:", error);

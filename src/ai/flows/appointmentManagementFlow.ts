@@ -126,21 +126,21 @@ export async function updateAppointmentStatus(appointmentId: string, status: App
   return updateAppointmentStatusFlow({ appointmentId, status });
 }
 
-// Delete an appointment
-const deleteAppointmentFlow = ai.defineFlow(
+// Cancel an appointment (sets status to 'Annulé')
+const cancelAppointmentFlow = ai.defineFlow(
     {
-        name: 'deleteAppointmentFlow',
+        name: 'cancelAppointmentFlow',
         inputSchema: z.string(), // appointmentId
         outputSchema: z.object({ success: z.boolean(), message: z.string().optional() }),
     },
     async (appointmentId) => {
-        const success = await AppointmentService.deleteAppointmentById(appointmentId);
+        const success = await AppointmentService.updateAppointmentStatus(appointmentId, 'Annulé');
         if (success) {
-            return { success: true, message: 'Appointment deleted successfully.' };
+            return { success: true, message: 'Appointment cancelled successfully.' };
         }
-        return { success: false, message: 'Appointment not found or already deleted.' };
+        return { success: false, message: 'Appointment not found or could not be cancelled.' };
     }
 );
-export async function deleteAppointment(appointmentId: string): Promise<{ success: boolean, message?: string }> {
-    return deleteAppointmentFlow(appointmentId);
+export async function cancelAppointment(appointmentId: string): Promise<{ success: boolean, message?: string }> {
+    return cancelAppointmentFlow(appointmentId);
 }
