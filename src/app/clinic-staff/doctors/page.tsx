@@ -86,7 +86,8 @@ export default function DoctorsListPage() {
   }, [fetchDoctors]);
 
   const handleLogout = () => {
-    setIsLoggedIn(false); // Simulate logout
+    sessionStorage.removeItem('loggedInUser');
+    setIsLoggedIn(false); 
     router.push('/');
   };
 
@@ -236,7 +237,7 @@ export default function DoctorsListPage() {
                             <AlertDialogHeader>
                               <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
                               <AlertDialogDescription>
-                                Êtes-vous sûr de vouloir supprimer le Dr. {doctor.fullName} ? Cette action est irréversible.
+                                Êtes-vous sûr de vouloir supprimer le Dr. {doctor.fullName} ? Cette action est irréversible et dissociera tous ses rendez-vous passés.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooterComponent>
@@ -344,3 +345,5 @@ export default function DoctorsListPage() {
     </div>
   );
 }
+
+    
