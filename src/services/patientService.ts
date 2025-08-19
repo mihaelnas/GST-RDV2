@@ -120,7 +120,7 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
 
 /**
  * Deletes a patient by their ID.
- * Relies on `ON DELETE SET NULL` constraint in the database to handle appointments.
+ * The ON DELETE SET NULL constraint in the database will handle dissociating appointments.
  * @param {string} id - The ID of the patient to delete.
  * @returns {Promise<boolean>} A promise that resolves to true if deletion was successful.
  */
@@ -129,9 +129,9 @@ export async function deletePatientById(id: string): Promise<boolean> {
   try {
     await client.query('BEGIN');
 
-    // Check for future appointments
+    // Business logic: prevent deletion if there are future, non-cancelled appointments.
     const appointmentCheck = await client.query(
-        'SELECT 1 FROM appointments WHERE patient_id = $1 AND date_time >= NOW() LIMIT 1',
+        "SELECT 1 FROM appointments WHERE patient_id = $1 AND date_time >= NOW() AND status <> 'Annulé' LIMIT 1",
         [id]
     );
 
@@ -139,8 +139,7 @@ export async function deletePatientById(id: string): Promise<boolean> {
       throw new Error('Impossible de supprimer le patient. Il a des rendez-vous futurs.');
     }
 
-    // The ON DELETE SET NULL constraint will handle dissociating past appointments.
-    // Proceed with deletion.
+    // Proceed with deletion. DB handles dissociating appointments via ON DELETE SET NULL.
     const deleteResult = await client.query('DELETE FROM patients WHERE id = $1', [id]);
     
     await client.query('COMMIT');

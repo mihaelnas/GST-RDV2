@@ -1,15 +1,11 @@
--- This script initializes the database schema and populates it with sample data.
 
--- Drop existing tables if they exist to start fresh
+-- Drop tables if they exist to ensure a clean slate on re-initialization
 DROP TABLE IF EXISTS appointments;
 DROP TABLE IF EXISTS clinic_staff;
 DROP TABLE IF EXISTS doctors;
 DROP TABLE IF EXISTS patients;
 
--- Create a function to generate random UUIDs if the extension isn't already enabled
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
--- Table for Patients
+-- Patients Table
 CREATE TABLE patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
@@ -17,7 +13,7 @@ CREATE TABLE patients (
     password_hash VARCHAR(255) NOT NULL
 );
 
--- Table for Doctors
+-- Doctors Table
 CREATE TABLE doctors (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
@@ -26,18 +22,17 @@ CREATE TABLE doctors (
     password_hash VARCHAR(255) NOT NULL
 );
 
--- Table for Clinic Staff (e.g., receptionists, administrators)
+-- Clinic Staff Table
 CREATE TABLE clinic_staff (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(50) NOT NULL DEFAULT 'receptionist' -- e.g., 'receptionist', 'admin'
+    password_hash VARCHAR(255) NOT NULL
 );
 
--- Table for Appointments
--- ON DELETE SET NULL ensures that if a doctor or patient is deleted, the appointment record is kept for historical purposes
--- without a dangling foreign key reference.
+-- Appointments Table
+-- ON DELETE SET NULL ensures that if a patient or doctor is deleted, the appointment record is kept
+-- for historical purposes, but the link is severed.
 CREATE TABLE appointments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     date_time TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -46,40 +41,34 @@ CREATE TABLE appointments (
     status VARCHAR(50) DEFAULT 'En attente' NOT NULL -- e.g., 'En attente', 'Confirmé', 'Annulé', 'Payée'
 );
 
--- Indexes for performance
-CREATE INDEX ON appointments (patient_id);
-CREATE INDEX ON appointments (doctor_id);
-CREATE INDEX ON appointments (date_time);
 
 -- Insert Sample Data
 
--- Passwords for all sample users are 'password123'
--- The hash was generated using: bcrypt.hash('password123', 10)
--- This avoids needing bcrypt in the SQL script itself.
--- Hashed password: $2a$10$3b/tC.aPZ3cW1b.g6A/ZJu.Gz0v0g.Xf.Has/9jPjB88TjP2E3mO.
+-- Patients (passwords are all 'password123' hashed)
+-- password for all is: $2a$10$3Z.Y4g.O/9y.a.L7v.HnHe1H.Q3bZq1K2t6E.Yg.Z9s7z3.Z7eZ.e
+INSERT INTO patients (full_name, email, password_hash) VALUES
+('Jean Dupont', 'jean.dupont@example.com', '$2a$10$3Z.Y4g.O/9y.a.L7v.HnHe1H.Q3bZq1K2t6E.Yg.Z9s7z3.Z7eZ.e'),
+('Marie Curie', 'marie.curie@example.com', '$2a$10$3Z.Y4g.O/9y.a.L7v.HnHe1H.Q3bZq1K2t6E.Yg.Z9s7z3.Z7eZ.e'),
+('Pierre Martin', 'pierre.martin@example.com', '$2a$10$3Z.Y4g.O/9y.a.L7v.HnHe1H.Q3bZq1K2t6E.Yg.Z9s7z3.Z7eZ.e');
 
--- Sample Patients
-INSERT INTO patients (id, full_name, email, password_hash) VALUES
-('1d44c844-3257-4148-8422-411394a85a4a', 'Jean Dupont', 'jean.dupont@example.com', '$2a$10$3b/tC.aPZ3cW1b.g6A/ZJu.Gz0v0g.Xf.Has/9jPjB88TjP2E3mO.'),
-('2e55d955-4368-5259-9533-5224a5b96b5b', 'Marie Martin', 'marie.martin@example.com', '$2a$10$3b/tC.aPZ3cW1b.g6A/ZJu.Gz0v0g.Xf.Has/9jPjB88TjP2E3mO.');
+-- Doctors (passwords are all 'password123' hashed)
+INSERT INTO doctors (full_name, specialty, email, password_hash) VALUES
+('Alice Martin', 'Cardiologie', 'alice.martin@example.com', '$2a$10$3Z.Y4g.O/9y.a.L7v.HnHe1H.Q3bZq1K2t6E.Yg.Z9s7z3.Z7eZ.e'),
+('Bernard Dubois', 'Dermatologie', 'bernard.dubois@example.com', '$2a$10$3Z.Y4g.O/9y.a.L7v.HnHe1H.Q3bZq1K2t6E.Yg.Z9s7z3.Z7eZ.e'),
+('Chloé Lambert', 'Pédiatrie', 'chloe.lambert@example.com', '$2a$10$3Z.Y4g.O/9y.a.L7v.HnHe1H.Q3bZq1K2t6E.Yg.Z9s7z3.Z7eZ.e');
 
--- Sample Doctors
-INSERT INTO doctors (id, full_name, specialty, email, password_hash) VALUES
-('a1b2c3d4-e5f6-7890-1234-567890abcdef', 'Dr. Alice Martin', 'Cardiologie', 'alice.martin@clinic.com', '$2a$10$3b/tC.aPZ3cW1b.g6A/ZJu.Gz0v0g.Xf.Has/9jPjB88TjP2E3mO.'),
-('b2c3d4e5-f6a7-8901-2345-67890abcdef1', 'Dr. Bernard Dubois', 'Pédiatrie', 'bernard.dubois@clinic.com', '$2a$10$3b/tC.aPZ3cW1b.g6A/ZJu.Gz0v0g.Xf.Has/9jPjB88TjP2E3mO.'),
-('c3d4e5f6-a7b8-9012-3456-7890abcdef12', 'Dr. Chloé Lambert', 'Dermatologie', 'chloe.lambert@clinic.com', '$2a$10$3b/tC.aPZ3cW1b.g6A/ZJu.Gz0v0g.Xf.Has/9jPjB88TjP2E3mO.');
+-- Clinic Staff (password is 'password123' hashed)
+INSERT INTO clinic_staff (full_name, email, password_hash) VALUES
+('Admin Sophie', 'sophie.admin@example.com', '$2a$10$3Z.Y4g.O/9y.a.L7v.HnHe1H.Q3bZq1K2t6E.Yg.Z9s7z3.Z7eZ.e');
 
-
--- Sample Clinic Staff
-INSERT INTO clinic_staff (id, full_name, email, password_hash, role) VALUES
-('3f66e066-5479-636a-a644-6335b6c07c6c', 'Admin Staff', 'admin@clinic.com', '$2a$10$3b/tC.aPZ3cW1b.g6A/ZJu.Gz0v0g.Xf.Has/9jPjB88TjP2E3mO.', 'admin');
-
--- Sample Appointments
--- Using the IDs from the sample data above
+-- Appointments
 INSERT INTO appointments (date_time, patient_id, doctor_id, status) VALUES
-(NOW() + INTERVAL '3 day', '1d44c844-3257-4148-8422-411394a85a4a', 'a1b2c3d4-e5f6-7890-1234-567890abcdef', 'Confirmé'),
-(NOW() + INTERVAL '5 day', '2e55d955-4368-5259-9533-5224a5b96b5b', 'b2c3d4e5-f6a7-8901-2345-67890abcdef1', 'En attente'),
-(NOW() - INTERVAL '10 day', '1d44c844-3257-4148-8422-411394a85a4a', 'a1b2c3d4-e5f6-7890-1234-567890abcdef', 'Payée');
+-- Today's appointments
+(NOW() + INTERVAL '2 hour', (SELECT id FROM patients WHERE email = 'jean.dupont@example.com'), (SELECT id FROM doctors WHERE email = 'alice.martin@example.com'), 'Confirmé'),
+(NOW() + INTERVAL '4 hour', (SELECT id FROM patients WHERE email = 'marie.curie@example.com'), (SELECT id FROM doctors WHERE email = 'bernard.dubois@example.com'), 'En attente'),
+-- Tomorrow's appointments
+(NOW() + INTERVAL '1 day' + INTERVAL '3 hour', (SELECT id FROM patients WHERE email = 'pierre.martin@example.com'), (SELECT id FROM doctors WHERE email = 'alice.martin@example.com'), 'En attente'),
+-- Past appointments
+(NOW() - INTERVAL '3 day', (SELECT id FROM patients WHERE email = 'jean.dupont@example.com'), (SELECT id FROM doctors WHERE email = 'chloe.lambert@example.com'), 'Payée'),
+(NOW() - INTERVAL '10 day', (SELECT id FROM patients WHERE email = 'marie.curie@example.com'), (SELECT id FROM doctors WHERE email = 'alice.martin@example.com'), 'Annulé');
 
--- Log to confirm the script ran
-\echo 'Database schema created and sample data inserted.'

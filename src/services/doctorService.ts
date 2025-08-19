@@ -14,6 +14,7 @@ import bcrypt from 'bcryptjs';
  */
 export async function getAllDoctors(): Promise<Doctor[]> {
   try {
+    // Explicitly list columns to avoid selecting the password_hash
     const result = await pool.query('SELECT id, full_name, specialty, email FROM doctors ORDER BY full_name ASC');
     return result.rows.map(row => ({
       id: row.id,
@@ -87,6 +88,7 @@ export async function updateDoctorById(id: string, data: DoctorUpdateInput): Pro
         values.push(data.email);
     }
     
+    // If no fields are provided to update, fetch and return the current doctor data.
     if (fields.length === 0) {
         const currentDoctor = await getDoctorById(id);
         if (!currentDoctor) throw new Error('Doctor not found with id: ' + id);
@@ -127,7 +129,7 @@ export async function updateDoctorById(id: string, data: DoctorUpdateInput): Pro
 
 /**
  * Deletes a doctor by their ID.
- * Relies on `ON DELETE SET NULL` constraint in the database to handle appointments.
+ * The ON DELETE SET NULL constraint in the database will handle dissociating appointments.
  * @param {string} id - The ID of the doctor to delete.
  * @returns {Promise<boolean>} A promise that resolves to true if deletion was successful.
  */
@@ -136,9 +138,9 @@ export async function deleteDoctorById(id: string): Promise<boolean> {
   try {
     await client.query('BEGIN');
 
-    // Check for future appointments which might prevent deletion depending on business logic
+    // Business logic: prevent deletion if there are future, non-cancelled appointments.
     const appointmentCheck = await client.query(
-        'SELECT 1 FROM appointments WHERE doctor_id = $1 AND date_time >= NOW() LIMIT 1',
+        "SELECT 1 FROM appointments WHERE doctor_id = $1 AND date_time >= NOW() AND status <> 'Annulé' LIMIT 1",
         [id]
     );
 
