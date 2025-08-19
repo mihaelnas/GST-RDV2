@@ -63,7 +63,6 @@ export default function DoctorsListPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [doctorToEdit, setDoctorToEdit] = useState<Doctor | null>(null);
-  const [doctorToDelete, setDoctorToDelete] = useState<Doctor | null>(null);
 
   const { register, handleSubmit, formState: { errors }, reset, clearErrors } = useForm<DoctorFormValues>({
     resolver: zodResolver(doctorFormSchema),
@@ -159,16 +158,11 @@ export default function DoctorsListPage() {
     }
   };
   
-  const confirmDeleteDoctor = (doctor: Doctor) => {
-    setDoctorToDelete(doctor);
-  };
-
-  const handleDeleteDoctor = async () => {
-    if (!doctorToDelete || !doctorToDelete.id) return;
+  const handleDeleteDoctor = async (doctorId: string, doctorName: string) => {
     try {
-      const result = await deleteDoctor(doctorToDelete.id);
+      const result = await deleteDoctor(doctorId);
       if (result.success) {
-        toast({ title: "Médecin Supprimé", description: `Le Dr. ${doctorToDelete.fullName} a été supprimé.`, variant: "destructive"});
+        toast({ title: "Médecin Supprimé", description: `Le Dr. ${doctorName} a été supprimé.`, variant: "destructive"});
         fetchDoctors(); // Refresh list
       } else {
         toast({ title: "Erreur", description: result.message || "Impossible de supprimer le médecin.", variant: "destructive"});
@@ -176,8 +170,6 @@ export default function DoctorsListPage() {
     } catch (error: any) {
       console.error("Failed to delete doctor:", error);
       toast({ title: "Erreur", description: error.message || "Une erreur s'est produite lors de la suppression.", variant: "destructive" });
-    } finally {
-      setDoctorToDelete(null); // Close confirmation dialog
     }
   };
 
@@ -236,24 +228,22 @@ export default function DoctorsListPage() {
                         </Button>
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="sm" onClick={() => confirmDeleteDoctor(doctor)} title="Supprimer">
+                              <Button variant="destructive" size="sm" title="Supprimer">
                                   <Trash2 className="h-4 w-4" />
                               </Button>
                           </AlertDialogTrigger>
-                          {doctorToDelete && doctorToDelete.id === doctor.id && (
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  Êtes-vous sûr de vouloir supprimer le Dr. {doctorToDelete?.fullName} ? Cette action est irréversible.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooterComponent>
-                                <AlertDialogCancel onClick={() => setDoctorToDelete(null)}>Annuler</AlertDialogCancel>
-                                <AlertDialogAction onClick={handleDeleteDoctor} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
-                              </AlertDialogFooterComponent>
-                            </AlertDialogContent>
-                          )}
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Confirmer la suppression</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Êtes-vous sûr de vouloir supprimer le Dr. {doctor.fullName} ? Cette action est irréversible.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooterComponent>
+                              <AlertDialogCancel>Annuler</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteDoctor(doctor.id, doctor.fullName)} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
+                            </AlertDialogFooterComponent>
+                          </AlertDialogContent>
                         </AlertDialog>
                       </TableCell>
                     </TableRow>
