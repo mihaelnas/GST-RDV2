@@ -14,7 +14,7 @@ export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]>
   const query = `
     SELECT
       a.id,
-      a.date,
+      a.date_time,
       a.patient_id,
       p.full_name AS patient_name,
       a.doctor_id,
@@ -23,13 +23,13 @@ export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]>
     FROM appointments a
     LEFT JOIN patients p ON a.patient_id = p.id
     LEFT JOIN doctors d ON a.doctor_id = d.id
-    ORDER BY a.date ASC;
+    ORDER BY a.date_time ASC;
   `;
   try {
     const result = await pool.query(query);
     return result.rows.map(row => ({
       id: row.id,
-      dateTime: new Date(row.date).toISOString(),
+      dateTime: new Date(row.date_time).toISOString(),
       patientId: row.patient_id,
       patientName: row.patient_name || 'Patient Supprimé',
       doctorId: row.doctor_id,
@@ -50,19 +50,19 @@ export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]>
  */
 export async function getAppointmentsByDoctorId(doctorId: string): Promise<BookedAppointment[]> {
     const query = {
-        text: `SELECT a.id, a.date, a.patient_id, p.full_name as patient_name, a.doctor_id, d.full_name as doctor_name, a.status
+        text: `SELECT a.id, a.date_time, a.patient_id, p.full_name as patient_name, a.doctor_id, d.full_name as doctor_name, a.status
                FROM appointments a
                LEFT JOIN doctors d on a.doctor_id = d.id
                LEFT JOIN patients p on a.patient_id = p.id
                WHERE a.doctor_id = $1
-               ORDER BY a.date ASC`,
+               ORDER BY a.date_time ASC`,
         values: [doctorId],
     };
     try {
         const result = await pool.query(query);
         return result.rows.map(row => ({
             id: row.id,
-            dateTime: new Date(row.date).toISOString(),
+            dateTime: new Date(row.date_time).toISOString(),
             patientId: row.patient_id,
             patientName: row.patient_name || 'Patient Supprimé',
             doctorId: row.doctor_id,
@@ -82,19 +82,19 @@ export async function getAppointmentsByDoctorId(doctorId: string): Promise<Booke
  */
 export async function getAppointmentsByPatientId(patientId: string): Promise<BookedAppointment[]> {
     const query = {
-        text: `SELECT a.id, a.date, a.patient_id, p.full_name as patient_name, a.doctor_id, d.full_name as doctor_name, a.status 
+        text: `SELECT a.id, a.date_time, a.patient_id, p.full_name as patient_name, a.doctor_id, d.full_name as doctor_name, a.status 
                FROM appointments a
                LEFT JOIN doctors d on a.doctor_id = d.id
                LEFT JOIN patients p on a.patient_id = p.id
                WHERE a.patient_id = $1
-               ORDER BY a.date DESC`,
+               ORDER BY a.date_time DESC`,
         values: [patientId],
     };
     try {
         const result = await pool.query(query);
         return result.rows.map(row => ({
             id: row.id,
-            dateTime: new Date(row.date).toISOString(),
+            dateTime: new Date(row.date_time).toISOString(),
             patientId: row.patient_id,
             patientName: row.patient_name || 'Patient Supprimé',
             doctorId: row.doctor_id,
@@ -116,9 +116,9 @@ export async function getAppointmentsByPatientId(patientId: string): Promise<Boo
 export async function createAppointment(data: Omit<AppointmentCreateInput, 'dateTime'> & { dateTime: Date }): Promise<AppointmentDetails> {
   const query = {
     text: `
-      INSERT INTO appointments(date, patient_id, doctor_id)
+      INSERT INTO appointments(date_time, patient_id, doctor_id)
       VALUES($1, $2, $3)
-      RETURNING id, date, patient_id, doctor_id, status;
+      RETURNING id, date_time, patient_id, doctor_id, status;
     `,
     values: [data.dateTime, data.patientId, data.doctorId],
   };
@@ -139,7 +139,7 @@ export async function createAppointment(data: Omit<AppointmentCreateInput, 'date
 
     return {
       id: newAppointment.id,
-      dateTime: new Date(newAppointment.date).toISOString(),
+      dateTime: new Date(newAppointment.date_time).toISOString(),
       patientId: newAppointment.patient_id,
       patientName: names.patient_name,
       doctorId: newAppointment.doctor_id,
