@@ -147,12 +147,9 @@ export async function deleteDoctorById(id: string): Promise<boolean> {
         throw new Error('Impossible de supprimer le médecin. Il a des rendez-vous futurs.');
     }
 
-    // To preserve history, we set doctor_id to NULL for past appointments.
-    await client.query(
-        'UPDATE appointments SET doctor_id = NULL WHERE doctor_id = $1',
-        [id]
-    );
-
+    // Since ON DELETE SET NULL is now in the DDL, we can just delete the doctor.
+    // The database will handle setting related appointment.doctor_id to NULL.
+    
     // Proceed with deletion of the doctor
     const deleteResult = await client.query('DELETE FROM doctors WHERE id = $1', [id]);
     
