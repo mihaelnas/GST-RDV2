@@ -53,11 +53,11 @@ export default function HomePage() {
       if (!success) {
         toast({
           title: "Erreur de Connexion à la Base de Données",
-          description: "Impossible d'établir la connexion à la base de données. Les fonctionnalités de l'application seront limitées.",
+          description: "Impossible d'établir la connexion. Les fonctionnalités de l'application seront limitées.",
           variant: "destructive",
           duration: Infinity, // Keep the toast visible
         });
-        console.error("Database connection check failed:", error);
+        // The detailed error is logged on the server-side, no need to log it again here.
       }
     };
     verifyDbConnection();
