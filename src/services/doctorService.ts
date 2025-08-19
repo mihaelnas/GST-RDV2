@@ -1,4 +1,3 @@
-
 /**
  * @fileOverview Service layer for doctor-related business logic.
  * This file encapsulates the logic for interacting with the doctor data source.
@@ -134,36 +133,19 @@ export async function updateDoctorById(id: string, data: DoctorUpdateInput): Pro
  * @returns {Promise<boolean>} A promise that resolves to true if deletion was successful.
  */
 export async function deleteDoctorById(id: string): Promise<boolean> {
-  const client = await pool.connect();
+  const query = {
+    text: 'DELETE FROM doctors WHERE id = $1',
+    values: [id],
+  };
   try {
-    await client.query('BEGIN');
-
-    // Business logic: prevent deletion if there are future, non-cancelled appointments.
-    const appointmentCheck = await client.query(
-        "SELECT 1 FROM appointments WHERE doctor_id = $1 AND date_time >= NOW() AND status <> 'Annulé' LIMIT 1",
-        [id]
-    );
-
-    if (appointmentCheck.rowCount > 0) {
-        throw new Error('Impossible de supprimer le médecin. Il a des rendez-vous futurs.');
-    }
-    
-    // Proceed with deletion. The database will handle setting related appointments' doctor_id to NULL.
-    const deleteResult = await client.query('DELETE FROM doctors WHERE id = $1', [id]);
-    
-    await client.query('COMMIT');
-    
-    return deleteResult.rowCount > 0;
-
+    const result = await pool.query(query);
+    return result.rowCount > 0;
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Database Error in deleteDoctorById:', error);
-    if (error instanceof Error && error.message.includes('Impossible de supprimer')) {
-        throw error;
-    }
-    throw new Error('Failed to delete doctor.');
-  } finally {
-    client.release();
+    // A real app should check for specific foreign key violation errors
+    // if not using ON DELETE SET NULL/CASCADE.
+    // For now, a generic error is sufficient.
+    throw new Error('Failed to delete doctor. Check for existing appointments.');
   }
 }
 

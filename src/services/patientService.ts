@@ -1,4 +1,3 @@
-
 /**
  * @fileOverview Service layer for patient-related business logic.
  * This file encapsulates the logic for interacting with the patient data source.
@@ -125,36 +124,16 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
  * @returns {Promise<boolean>} A promise that resolves to true if deletion was successful.
  */
 export async function deletePatientById(id: string): Promise<boolean> {
-  const client = await pool.connect();
+  const query = {
+    text: 'DELETE FROM patients WHERE id = $1',
+    values: [id],
+  };
   try {
-    await client.query('BEGIN');
-
-    // Business logic: prevent deletion if there are future, non-cancelled appointments.
-    const appointmentCheck = await client.query(
-        "SELECT 1 FROM appointments WHERE patient_id = $1 AND date_time >= NOW() AND status <> 'Annulé' LIMIT 1",
-        [id]
-    );
-
-    if (appointmentCheck.rowCount > 0) {
-      throw new Error('Impossible de supprimer le patient. Il a des rendez-vous futurs.');
-    }
-
-    // Proceed with deletion. DB handles dissociating appointments via ON DELETE SET NULL.
-    const deleteResult = await client.query('DELETE FROM patients WHERE id = $1', [id]);
-    
-    await client.query('COMMIT');
-    
-    return deleteResult.rowCount > 0;
-
+    const result = await pool.query(query);
+    return result.rowCount > 0;
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Database Error in deletePatientById:', error);
-     if (error instanceof Error && error.message.includes('Impossible de supprimer')) {
-        throw error;
-    }
-    throw new Error('Failed to delete patient.');
-  } finally {
-    client.release();
+    throw new Error('Failed to delete patient. Check for existing appointments.');
   }
 }
 
