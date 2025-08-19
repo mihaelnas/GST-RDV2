@@ -7,6 +7,7 @@ import type { AppointmentDetails, AppointmentCreateInput, BookedAppointment } fr
 
 /**
  * Retrieves all appointments with patient and doctor details.
+ * Uses LEFT JOIN to handle cases where patient or doctor may have been deleted.
  * @returns {Promise<AppointmentDetails[]>} A promise that resolves to an array of appointments.
  */
 export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]> {
@@ -20,8 +21,8 @@ export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]>
       d.full_name AS doctor_name,
       a.status
     FROM appointments a
-    JOIN patients p ON a.patient_id = p.id
-    JOIN doctors d ON a.doctor_id = d.id
+    LEFT JOIN patients p ON a.patient_id = p.id
+    LEFT JOIN doctors d ON a.doctor_id = d.id
     ORDER BY a.date ASC;
   `;
   try {
@@ -30,9 +31,9 @@ export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]>
       id: row.id,
       dateTime: row.date.toISOString(),
       patientId: row.patient_id,
-      patientName: row.patient_name,
+      patientName: row.patient_name || 'Patient Supprimé',
       doctorId: row.doctor_id,
-      doctorName: row.doctor_name,
+      doctorName: row.doctor_name || 'Médecin Supprimé',
       status: row.status,
       durationMinutes: 30, // Defaulting as column doesn't exist
     }));
@@ -51,8 +52,8 @@ export async function getAppointmentsByDoctorId(doctorId: string): Promise<Booke
     const query = {
         text: `SELECT a.id, a.date, a.patient_id, p.full_name as patient_name, a.doctor_id, d.full_name as doctor_name, a.status
                FROM appointments a
-               JOIN doctors d on a.doctor_id = d.id
-               JOIN patients p on a.patient_id = p.id
+               LEFT JOIN doctors d on a.doctor_id = d.id
+               LEFT JOIN patients p on a.patient_id = p.id
                WHERE a.doctor_id = $1
                ORDER BY a.date ASC`,
         values: [doctorId],
@@ -63,7 +64,7 @@ export async function getAppointmentsByDoctorId(doctorId: string): Promise<Booke
             id: row.id,
             dateTime: row.date.toISOString(),
             patientId: row.patient_id,
-            patientName: row.patient_name,
+            patientName: row.patient_name || 'Patient Supprimé',
             doctorId: row.doctor_id,
             doctorName: row.doctor_name,
             status: row.status,
@@ -83,8 +84,8 @@ export async function getAppointmentsByPatientId(patientId: string): Promise<Boo
     const query = {
         text: `SELECT a.id, a.date, a.patient_id, p.full_name as patient_name, a.doctor_id, d.full_name as doctor_name, a.status 
                FROM appointments a
-               JOIN doctors d on a.doctor_id = d.id
-               JOIN patients p on a.patient_id = p.id
+               LEFT JOIN doctors d on a.doctor_id = d.id
+               LEFT JOIN patients p on a.patient_id = p.id
                WHERE a.patient_id = $1
                ORDER BY a.date DESC`,
         values: [patientId],
@@ -97,7 +98,7 @@ export async function getAppointmentsByPatientId(patientId: string): Promise<Boo
             patientId: row.patient_id,
             patientName: row.patient_name,
             doctorId: row.doctor_id,
-            doctorName: row.doctor_name,
+            doctorName: row.doctor_name || 'Médecin Supprimé',
             status: row.status,
         }));
     } catch (error) {
