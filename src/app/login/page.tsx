@@ -44,6 +44,10 @@ export default function LoginPage() {
     try {
       const loggedInUser = await login(data);
       
+      if (!loggedInUser) {
+        throw new Error("Les données de l'utilisateur n'ont pas pu être récupérées.");
+      }
+
       // Store user info in session storage for a simple session management
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
