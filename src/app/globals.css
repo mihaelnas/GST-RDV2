@@ -1,9 +1,10 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 body {
-  font-family: 'Inter', Arial, Helvetica, sans-serif; /* Updated default font */
+  font-family: 'PT Sans', sans-serif; /* Updated default font */
 }
 
 @layer base {

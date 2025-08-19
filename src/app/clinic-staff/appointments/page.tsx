@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
 import { useState, useMemo, useEffect, useCallback } from 'react';
-import { CalendarClock, Filter, ArrowLeft, BadgeCheck, BadgeX, BadgeHelp, Edit, Ban, Loader2, CheckSquare } from 'lucide-react';
+import { CalendarClock, Filter, ArrowLeft, BadgeCheck, BadgeX, BadgeHelp, Ban, Loader2, CheckSquare } from 'lucide-react';
 import { format, parseISO, startOfDay, isEqual } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
@@ -87,13 +87,6 @@ export default function ViewAppointmentsPage() {
       return dateMatch && doctorMatch && statusMatch;
     }).sort((a, b) => parseISO(a.dateTime).getTime() - parseISO(b.dateTime).getTime());
   }, [filterDate, filterDoctor, filterStatus, appointments]);
-
-  const handleEditAppointment = (appointmentId: string) => {
-    toast({
-      title: "Fonctionnalité non implémentée",
-      description: `La modification du rendez-vous ${appointmentId} n'est pas encore disponible.`,
-    });
-  };
 
   const handleStatusUpdate = async (appointmentId: string, newStatus: 'Annulé' | 'Confirmé') => {
     try {

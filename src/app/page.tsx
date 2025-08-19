@@ -9,12 +9,11 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import Image from 'next/image';
 import type { DayOfWeek } from '@/app/doctor/availability/page';
+import { format } from 'date-fns';
 
 // In a real app, this would be fetched from a central store or context
 // that gets its data from the database. For now, we manage it in the root page state.
-const initialDoctorSchedules: Record<string, { weeklySchedule: DayOfWeek[], absences: any[] }> = {
-  // These will be populated from localStorage or a default
-};
+const initialDoctorSchedules: Record<string, { weeklySchedule: DayOfWeek[], absences: any[] }> = {};
 
 const defaultDoctorWeeklySchedule = (name: string) => ({
     weeklySchedule: [
@@ -31,7 +30,6 @@ const defaultDoctorWeeklySchedule = (name: string) => ({
     ],
 });
 
-import { format } from 'date-fns';
 
 export default function HomePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);

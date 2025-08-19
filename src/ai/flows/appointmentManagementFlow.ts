@@ -15,7 +15,7 @@ const AppointmentDetailsSchema = z.object({
   patientName: z.string(),
   doctorId: z.string(),
   doctorName: z.string(),
-  status: z.string(),
+  status: z.enum(['En attente', 'Confirmé', 'Annulé', 'Payée']),
   durationMinutes: z.number(),
 });
 export type AppointmentDetails = z.infer<typeof AppointmentDetailsSchema>;
@@ -33,7 +33,7 @@ const BookedAppointmentSchema = z.object({
 export type BookedAppointment = z.infer<typeof BookedAppointmentSchema>;
 
 const AppointmentCreateInputSchema = z.object({
-  dateTime: z.string().datetime(), // Changed from z.date() to z.string().datetime()
+  dateTime: z.string().datetime(),
   patientId: z.string(),
   doctorId: z.string(),
 });

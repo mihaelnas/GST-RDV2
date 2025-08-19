@@ -44,7 +44,7 @@ export default function LoginPage() {
     try {
       const loggedInUser = await login(data);
       
-      if (!loggedInUser) {
+      if (!loggedInUser || !loggedInUser.fullName) {
         throw new Error("Les données de l'utilisateur n'ont pas pu être récupérées.");
       }
 
