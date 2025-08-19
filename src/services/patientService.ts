@@ -53,7 +53,7 @@ export async function createPatient(data: PatientCreateInput): Promise<Patient> 
   } catch (error) {
     console.error('Database Error in createPatient:', error);
     if ((error as any).code === '23505') {
-      throw new Error('A patient with this email already exists.');
+      throw new Error('Un patient avec cet e-mail existe déjà.');
     }
     throw new Error('Failed to create patient.');
   }
@@ -111,7 +111,7 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
     } catch (error) {
         console.error('Database Error in updatePatientById:', error);
         if ((error as any).code === '23505') {
-            throw new Error('A patient with this email already exists.');
+            throw new Error('Un patient avec cet e-mail existe déjà.');
         }
         throw new Error('Failed to update patient.');
     }
@@ -135,7 +135,7 @@ export async function deletePatientById(id: string): Promise<boolean> {
     );
 
     if (appointmentCheck.rowCount > 0) {
-      throw new Error('Cannot delete patient with future appointments. Please cancel them first.');
+      throw new Error('Impossible de supprimer le patient. Il a des rendez-vous futurs.');
     }
 
     // Proceed with deletion if no future appointments
@@ -148,7 +148,7 @@ export async function deletePatientById(id: string): Promise<boolean> {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Database Error in deletePatientById:', error);
-     if (error instanceof Error && error.message.includes('Cannot delete patient')) {
+     if (error instanceof Error && error.message.includes('Impossible de supprimer')) {
         throw error;
     }
     throw new Error('Failed to delete patient.');

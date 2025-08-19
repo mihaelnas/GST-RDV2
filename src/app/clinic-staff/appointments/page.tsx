@@ -71,6 +71,7 @@ export default function ViewAppointmentsPage() {
   }, [allDoctors]);
 
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false);
     router.push('/');
   };
@@ -216,7 +217,7 @@ export default function ViewAppointmentsPage() {
                           <CheckSquare className="h-4 w-4" />
                         </Button>
                       )}
-                      {app.status !== 'Annulé' && (
+                      {app.status !== 'Annulé' && app.status !== 'Payée' && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="destructive" size="sm" title="Annuler le rendez-vous">

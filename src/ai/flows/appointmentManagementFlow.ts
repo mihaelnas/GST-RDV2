@@ -109,14 +109,17 @@ export async function createAppointment(input: AppointmentCreateInput): Promise<
 const updateAppointmentStatusFlow = ai.defineFlow(
   {
     name: 'updateAppointmentStatusFlow',
-    inputSchema: z.object({ appointmentId: z.string(), status: z.string() }),
+    inputSchema: z.object({ 
+        appointmentId: z.string(), 
+        status: z.enum(['En attente', 'Confirmé', 'Annulé', 'Payée']) 
+    }),
     outputSchema: z.boolean(),
   },
   async ({ appointmentId, status }) => {
     return AppointmentService.updateAppointmentStatus(appointmentId, status);
   }
 );
-export async function updateAppointmentStatus(appointmentId: string, status: string): Promise<boolean> {
+export async function updateAppointmentStatus(appointmentId: string, status: 'En attente' | 'Confirmé' | 'Annulé' | 'Payée'): Promise<boolean> {
   return updateAppointmentStatusFlow({ appointmentId, status });
 }
 

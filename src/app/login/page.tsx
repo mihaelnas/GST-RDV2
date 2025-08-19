@@ -45,6 +45,7 @@ export default function LoginPage() {
       const loggedInUser = await login(data);
       
       if (!loggedInUser || !loggedInUser.fullName) {
+        // This case should ideally not be hit if the backend is correct, but it's a good safeguard.
         throw new Error("Les données de l'utilisateur n'ont pas pu être récupérées.");
       }
 

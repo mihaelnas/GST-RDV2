@@ -55,7 +55,7 @@ export async function createDoctor(data: DoctorCreateInput): Promise<Doctor> {
   } catch (error) {
     console.error('Database Error in createDoctor:', error);
     if ((error as any).code === '23505') {
-      throw new Error('A doctor with this email already exists.');
+      throw new Error('Un médecin avec cet e-mail existe déjà.');
     }
     throw new Error('Failed to create doctor.');
   }
@@ -88,7 +88,6 @@ export async function updateDoctorById(id: string, data: DoctorUpdateInput): Pro
     }
     
     if (fields.length === 0) {
-        // If no fields to update, fetch and return the current doctor data
         const currentDoctor = await getDoctorById(id);
         if (!currentDoctor) throw new Error('Doctor not found with id: ' + id);
         return currentDoctor;
@@ -119,7 +118,7 @@ export async function updateDoctorById(id: string, data: DoctorUpdateInput): Pro
     } catch (error) {
         console.error('Database Error in updateDoctorById:', error);
         if ((error as any).code === '23505') {
-            throw new Error('A doctor with this email already exists.');
+            throw new Error('Un médecin avec cet e-mail existe déjà.');
         }
         throw new Error('Failed to update doctor.');
     }
@@ -143,7 +142,7 @@ export async function deleteDoctorById(id: string): Promise<boolean> {
     );
 
     if (appointmentCheck.rowCount > 0) {
-        throw new Error('Cannot delete doctor with future appointments. Please reassign or cancel them first.');
+        throw new Error('Impossible de supprimer le médecin. Il a des rendez-vous futurs.');
     }
 
     // Proceed with deletion if no future appointments
@@ -157,7 +156,7 @@ export async function deleteDoctorById(id: string): Promise<boolean> {
     await client.query('ROLLBACK');
     console.error('Database Error in deleteDoctorById:', error);
     // Re-throw custom error messages or a generic one
-    if (error instanceof Error && error.message.includes('Cannot delete doctor')) {
+    if (error instanceof Error && error.message.includes('Impossible de supprimer')) {
         throw error;
     }
     throw new Error('Failed to delete doctor.');

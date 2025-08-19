@@ -40,6 +40,7 @@ export default function BillingPage() {
   }, [fetchBillingAppointments]);
 
   const handleLogout = () => {
+    sessionStorage.removeItem('loggedInUser');
     setIsLoggedIn(false);
     router.push('/');
   };
