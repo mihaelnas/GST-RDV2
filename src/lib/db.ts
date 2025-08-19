@@ -22,6 +22,9 @@ if (!process.env.POSTGRES_URL) {
 
 const pool = new Pool({
     connectionString: process.env.POSTGRES_URL,
+    // Explicitly set the client encoding to UTF8 to prevent issues with special characters.
+    // This is critical for handling accented characters correctly.
+    client_encoding: 'UTF8',
 });
 
 pool.on('connect', () => {
