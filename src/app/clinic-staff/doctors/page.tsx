@@ -40,16 +40,23 @@ import { listDoctors, addDoctor, updateDoctor, deleteDoctor } from '@/ai/flows/d
 import type { Doctor, DoctorCreateInput, DoctorUpdateInput } from '@/ai/flows/doctorManagementFlow';
 
 
-// Schema for form validation (client-side)
-const doctorFormSchema = z.object({
-  id: z.string().optional(),
+// Schema for adding a doctor
+const doctorAddSchema = z.object({
   fullName: z.string().min(3, { message: "Le nom complet est requis (min 3 caractères)." }),
   specialty: z.string().min(3, { message: "La spécialité est requise (min 3 caractères)." }),
   email: z.string().email({ message: "Adresse e-mail invalide." }),
-  password: z.string().min(6, { message: "Le mot de passe doit contenir au moins 6 caractères." }).optional(),
+  password: z.string().min(6, { message: "Le mot de passe doit contenir au moins 6 caractères." }),
 });
 
-type DoctorFormValues = z.infer<typeof doctorFormSchema>;
+// Schema for editing a doctor
+const doctorEditSchema = z.object({
+  id: z.string(),
+  fullName: z.string().min(3, { message: "Le nom complet est requis (min 3 caractères)." }),
+  specialty: z.string().min(3, { message: "La spécialité est requise (min 3 caractères)." }),
+  email: z.string().email({ message: "Adresse e-mail invalide." }),
+});
+
+type DoctorFormValues = z.infer<typeof doctorAddSchema> & Partial<z.infer<typeof doctorEditSchema>>;
 
 
 export default function DoctorsListPage() {
@@ -63,10 +70,9 @@ export default function DoctorsListPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [doctorToEdit, setDoctorToEdit] = useState<Doctor | null>(null);
+  const [doctorToDelete, setDoctorToDelete] = useState<Doctor | null>(null);
 
-  const { register, handleSubmit, formState: { errors }, reset, clearErrors } = useForm<DoctorFormValues>({
-    resolver: zodResolver(doctorFormSchema),
-  });
+  const { register, handleSubmit, formState: { errors }, reset, clearErrors, trigger, getValues } = useForm<DoctorFormValues>();
 
   const fetchDoctors = useCallback(async () => {
     setIsLoading(true);
@@ -110,17 +116,20 @@ export default function DoctorsListPage() {
       fullName: doctor.fullName,
       specialty: doctor.specialty,
       email: doctor.email,
-      password: '', // Password not edited here, so clear it from form state
     });
     clearErrors();
     setIsEditModalOpen(true);
   };
   
   const onAddSubmit: SubmitHandler<DoctorFormValues> = async (data) => {
-    if (!data.password) { // Ensure password is provided for add
-      toast({ title: "Erreur de validation", description: "Le mot de passe est requis pour ajouter un médecin.", variant: "destructive"});
-      return;
+    const isValid = await trigger(["fullName", "specialty", "email", "password"]);
+    if (!isValid) return;
+
+    if (!data.password) {
+        toast({ title: "Erreur", description: "Le mot de passe est requis.", variant: "destructive" });
+        return;
     }
+    
     const createInput: DoctorCreateInput = {
       fullName: data.fullName,
       specialty: data.specialty,
@@ -139,7 +148,8 @@ export default function DoctorsListPage() {
   };
 
   const onEditSubmit: SubmitHandler<DoctorFormValues> = async (data) => {
-    if (!doctorToEdit || !doctorToEdit.id) return;
+    const isValid = await trigger(["fullName", "specialty", "email"]);
+    if (!isValid || !doctorToEdit) return;
     
     const updateData: DoctorUpdateInput = {
         fullName: data.fullName,
@@ -159,11 +169,11 @@ export default function DoctorsListPage() {
     }
   };
   
-  const handleDeleteDoctor = async (doctorId: string, doctorName: string) => {
+  const handleDeleteDoctor = async (doctor: Doctor) => {
     try {
-      const result = await deleteDoctor(doctorId);
+      const result = await deleteDoctor(doctor.id);
       if (result.success) {
-        toast({ title: "Médecin Supprimé", description: `Le Dr. ${doctorName} a été supprimé.`, variant: "destructive"});
+        toast({ title: "Médecin Supprimé", description: `Le Dr. ${doctor.fullName} a été supprimé.`, variant: "destructive"});
         fetchDoctors(); // Refresh list
       } else {
         toast({ title: "Erreur", description: result.message || "Impossible de supprimer le médecin.", variant: "destructive"});
@@ -171,6 +181,8 @@ export default function DoctorsListPage() {
     } catch (error: any) {
       console.error("Failed to delete doctor:", error);
       toast({ title: "Erreur", description: error.message || "Une erreur s'est produite lors de la suppression.", variant: "destructive" });
+    } finally {
+        setDoctorToDelete(null);
     }
   };
 
@@ -227,9 +239,9 @@ export default function DoctorsListPage() {
                         <Button variant="outline" size="sm" onClick={() => openEditModal(doctor)} title="Modifier">
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <AlertDialog>
+                        <AlertDialog open={doctorToDelete?.id === doctor.id} onOpenChange={(isOpen) => !isOpen && setDoctorToDelete(null)}>
                           <AlertDialogTrigger asChild>
-                              <Button variant="destructive" size="sm" title="Supprimer">
+                              <Button variant="destructive" size="sm" title="Supprimer" onClick={() => setDoctorToDelete(doctor)}>
                                   <Trash2 className="h-4 w-4" />
                               </Button>
                           </AlertDialogTrigger>
@@ -241,8 +253,8 @@ export default function DoctorsListPage() {
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooterComponent>
-                              <AlertDialogCancel>Annuler</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDeleteDoctor(doctor.id, doctor.fullName)} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
+                              <AlertDialogCancel onClick={() => setDoctorToDelete(null)}>Annuler</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDeleteDoctor(doctor)} className="bg-destructive hover:bg-destructive/90">Supprimer</AlertDialogAction>
                             </AlertDialogFooterComponent>
                           </AlertDialogContent>
                         </AlertDialog>
