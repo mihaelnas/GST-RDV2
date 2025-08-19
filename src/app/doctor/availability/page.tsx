@@ -14,7 +14,7 @@ import { useForm, SubmitHandler, useFieldArray, Controller } from 'react-hook-fo
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useToast } from '@/hooks/use-toast';
-import { format, parseISO, parse } from 'date-fns';
+import { format, parseISO, parse, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
@@ -60,7 +60,9 @@ const weeklyScheduleSchema = z.object({
 type WeeklyScheduleFormValues = z.infer<typeof weeklyScheduleSchema>;
 
 const absenceSchema = z.object({
-  date: z.string().min(1, { message: "La date est requise."}),
+  date: z.string().min(1, { message: "La date est requise."}).refine(date => startOfDay(new Date(date)) >= startOfDay(new Date()), {
+    message: "La date d'absence ne peut pas être dans le passé.",
+  }),
   isFullDay: z.boolean(),
   startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Format HH:MM requis."}).optional().or(z.literal('')),
   endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Format HH:MM requis."}).optional().or(z.literal('')),
