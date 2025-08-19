@@ -145,7 +145,7 @@ export async function deletePatientById(id: string): Promise<boolean> {
     }
 
     await client.query(
-        'UPDATE appointments SET patient_id = NULL WHERE patient_id = $1 AND date < NOW()',
+        'UPDATE appointments SET patient_id = NULL WHERE patient_id = $1',
         [id]
     );
 
