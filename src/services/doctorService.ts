@@ -126,8 +126,8 @@ export async function updateDoctorById(id: string, data: DoctorUpdateInput): Pro
 
 
 /**
- * Deletes a doctor by their ID, after checking for future appointments.
- * Past appointments will have their doctor_id set to NULL to preserve history without invalid foreign keys.
+ * Deletes a doctor by their ID.
+ * Relies on `ON DELETE SET NULL` constraint in the database to handle appointments.
  * @param {string} id - The ID of the doctor to delete.
  * @returns {Promise<boolean>} A promise that resolves to true if deletion was successful.
  */
@@ -136,21 +136,17 @@ export async function deleteDoctorById(id: string): Promise<boolean> {
   try {
     await client.query('BEGIN');
 
-    // Check for future appointments
+    // Check for future appointments which might prevent deletion depending on business logic
     const appointmentCheck = await client.query(
         'SELECT 1 FROM appointments WHERE doctor_id = $1 AND date_time >= NOW() LIMIT 1',
         [id]
     );
 
     if (appointmentCheck.rowCount > 0) {
-        // This is the specific error condition we want to report to the user.
         throw new Error('Impossible de supprimer le médecin. Il a des rendez-vous futurs.');
     }
-
-    // Since ON DELETE SET NULL is now in the DDL, we can just delete the doctor.
-    // The database will handle setting related appointment.doctor_id to NULL.
     
-    // Proceed with deletion of the doctor
+    // Proceed with deletion. The database will handle setting related appointments' doctor_id to NULL.
     const deleteResult = await client.query('DELETE FROM doctors WHERE id = $1', [id]);
     
     await client.query('COMMIT');
@@ -160,7 +156,6 @@ export async function deleteDoctorById(id: string): Promise<boolean> {
   } catch (error) {
     await client.query('ROLLBACK');
     console.error('Database Error in deleteDoctorById:', error);
-    // Re-throw custom error messages or a generic one
     if (error instanceof Error && error.message.includes('Impossible de supprimer')) {
         throw error;
     }

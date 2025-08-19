@@ -119,8 +119,8 @@ export async function updatePatientById(id: string, data: PatientUpdateInput): P
 
 
 /**
- * Deletes a patient by their ID using a transaction to ensure data integrity.
- * It checks for future appointments and dissociates past appointments before deletion.
+ * Deletes a patient by their ID.
+ * Relies on `ON DELETE SET NULL` constraint in the database to handle appointments.
  * @param {string} id - The ID of the patient to delete.
  * @returns {Promise<boolean>} A promise that resolves to true if deletion was successful.
  */
@@ -128,13 +128,8 @@ export async function deletePatientById(id: string): Promise<boolean> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    
-    const patientExistsResult = await client.query('SELECT 1 FROM patients WHERE id = $1', [id]);
-    if (patientExistsResult.rowCount === 0) {
-      await client.query('ROLLBACK');
-      return false; 
-    }
 
+    // Check for future appointments
     const appointmentCheck = await client.query(
         'SELECT 1 FROM appointments WHERE patient_id = $1 AND date_time >= NOW() LIMIT 1',
         [id]
@@ -144,11 +139,8 @@ export async function deletePatientById(id: string): Promise<boolean> {
       throw new Error('Impossible de supprimer le patient. Il a des rendez-vous futurs.');
     }
 
-    await client.query(
-        'UPDATE appointments SET patient_id = NULL WHERE patient_id = $1',
-        [id]
-    );
-
+    // The ON DELETE SET NULL constraint will handle dissociating past appointments.
+    // Proceed with deletion.
     const deleteResult = await client.query('DELETE FROM patients WHERE id = $1', [id]);
     
     await client.query('COMMIT');
