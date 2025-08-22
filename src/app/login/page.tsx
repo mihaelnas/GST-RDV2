@@ -20,7 +20,8 @@ import * as z from 'zod';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { login } from '@/ai/flows/authenticationFlow';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import type { LoginOutput } from '@/ai/schemas/authSchemas';
 
 
 const loginSchema = z.object({
@@ -34,25 +35,15 @@ export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loggedInUser, setLoggedInUser] = useState<LoginOutput | null>(null);
 
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
   });
 
-  const onSubmit = async (data: LoginFormValues) => {
-    setIsSubmitting(true);
-    try {
-      const loggedInUser = await login(data);
-      
-      if (!loggedInUser || !loggedInUser.fullName) {
-        // This case should ideally not be hit if the backend is correct, but it's a good safeguard.
-        throw new Error("Les données de l'utilisateur n'ont pas pu être récupérées.");
-      }
-
-      // Store user info in session storage for a simple session management
-      if (typeof window !== 'undefined') {
-        sessionStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
-      }
+  useEffect(() => {
+    if (loggedInUser && typeof window !== 'undefined') {
+      sessionStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
       
       toast({
         title: "Connexion réussie",
@@ -74,6 +65,18 @@ export default function LoginPage() {
         default:
           router.push('/'); // Fallback to home
       }
+    }
+  }, [loggedInUser, router, toast]);
+
+  const onSubmit = async (data: LoginFormValues) => {
+    setIsSubmitting(true);
+    try {
+      const user = await login(data);
+      
+      if (!user || !user.fullName) {
+        throw new Error("Les données de l'utilisateur n'ont pas pu être récupérées.");
+      }
+      setLoggedInUser(user);
 
     } catch (error: any) {
       console.error("Login failed:", error);

@@ -18,7 +18,8 @@ export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]>
       p.full_name AS patient_name,
       a.doctor_id,
       d.full_name AS doctor_name,
-      a.status
+      a.status,
+      a.duration_minutes
     FROM appointments a
     LEFT JOIN patients p ON a.patient_id = p.id
     LEFT JOIN doctors d ON a.doctor_id = d.id
@@ -34,7 +35,7 @@ export async function getAllAppointmentsDetails(): Promise<AppointmentDetails[]>
       doctorId: row.doctor_id,
       doctorName: row.doctor_name || 'Médecin Supprimé',
       status: row.status,
-      durationMinutes: 30, // Defaulting as column doesn't exist
+      durationMinutes: row.duration_minutes,
     }));
   } catch (error) {
     console.error('Database Error in getAllAppointmentsDetails:', error);
@@ -117,7 +118,7 @@ export async function createAppointment(data: Omit<AppointmentCreateInput, 'date
     text: `
       INSERT INTO appointments(date_time, patient_id, doctor_id)
       VALUES($1, $2, $3)
-      RETURNING id, date_time, patient_id, doctor_id, status;
+      RETURNING id, date_time, patient_id, doctor_id, status, duration_minutes;
     `,
     values: [data.dateTime, data.patientId, data.doctorId],
   };
@@ -144,7 +145,7 @@ export async function createAppointment(data: Omit<AppointmentCreateInput, 'date
       doctorId: newAppointment.doctor_id,
       doctorName: names.doctor_name,
       status: newAppointment.status,
-      durationMinutes: 30, // Defaulting as column doesn't exist
+      durationMinutes: newAppointment.duration_minutes,
     };
   } catch (error) {
     console.error('Database Error in createAppointment:', error);

@@ -74,6 +74,8 @@ export async function authenticateUser(email: string, password: string): Promise
   } finally {
     // CRITICAL: Always release the client back to the pool in a finally block
     // to prevent connection leaks, which can exhaust the pool and crash the app.
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
