@@ -149,7 +149,11 @@ export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: Ap
         }
       } catch (error) {
         console.error("Failed to fetch doctors:", error);
-        toast({ title: "Erreur", description: "Impossible de charger les médecins.", variant: "destructive" });
+        toast({
+          title: "Erreur de chargement",
+          description: "Impossible de charger la liste des médecins.",
+          variant: "destructive"
+        });
       } finally {
         setIsLoadingDoctors(false);
       }
@@ -162,7 +166,11 @@ export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: Ap
       setAllBookedAppointments(bookings.map(b => ({...b, dateTime: b.dateTime})));
     } catch (error) {
         console.error("Failed to fetch booked appointments:", error);
-        toast({ title: "Erreur", description: "Impossible de charger les rendez-vous existants.", variant: "destructive" });
+        toast({
+          title: "Erreur de chargement",
+          description: "Impossible de charger les rendez-vous existants.",
+          variant: "destructive"
+        });
     } finally {
         setIsLoadingSlots(false);
     }

@@ -79,8 +79,8 @@ export default function HomePage() {
         } catch (error) {
             console.error("Could not load or initialize doctor schedules:", error);
             toast({
-                title: "Erreur de chargement",
-                description: "Impossible de charger les plannings des médecins.",
+                title: "Erreur de chargement des plannings",
+                description: "Impossible de récupérer la liste des médecins pour initialiser les plannings.",
                 variant: "destructive"
             });
         }
