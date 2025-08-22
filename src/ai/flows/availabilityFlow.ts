@@ -7,7 +7,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 import * as ScheduleService from '@/services/scheduleService';
 import { 
-  WeeklyScheduleSchema,
+  DayScheduleSchema,
   AbsenceSchema,
   AbsenceCreateSchema,
   DoctorAvailabilitySchema,
@@ -40,7 +40,7 @@ const updateWeeklyScheduleFlow = ai.defineFlow(
     name: 'updateWeeklyScheduleFlow',
     inputSchema: z.object({
         doctorId: z.string(),
-        schedule: z.array(WeeklyScheduleSchema.shape.schedule.element),
+        schedule: z.array(DayScheduleSchema),
     }),
     outputSchema: z.boolean(),
   },

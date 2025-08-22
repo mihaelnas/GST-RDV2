@@ -6,7 +6,7 @@ import { parse } from 'date-fns';
 
 // --- Zod Schemas ---
 
-const DayScheduleSchema = z.object({
+export const DayScheduleSchema = z.object({
   dayOfWeek: z.number().int().min(1).max(7),
   dayName: z.string(),
   isWorkingDay: z.boolean(),
