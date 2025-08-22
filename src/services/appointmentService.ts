@@ -1,4 +1,3 @@
-
 /**
  * @fileOverview Service layer for appointment-related business logic.
  */
