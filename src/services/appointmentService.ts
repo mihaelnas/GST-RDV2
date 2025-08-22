@@ -116,11 +116,11 @@ export async function getAppointmentsByPatientId(patientId: string): Promise<Boo
 export async function createAppointment(data: Omit<AppointmentCreateInput, 'dateTime'> & { dateTime: Date }): Promise<AppointmentDetails> {
   const query = {
     text: `
-      INSERT INTO appointments(date_time, patient_id, doctor_id)
-      VALUES($1, $2, $3)
+      INSERT INTO appointments(date_time, patient_id, doctor_id, duration_minutes)
+      VALUES($1, $2, $3, $4)
       RETURNING id, date_time, patient_id, doctor_id, status, duration_minutes;
     `,
-    values: [data.dateTime, data.patientId, data.doctorId],
+    values: [data.dateTime, data.patientId, data.doctorId, 30], // Default duration to 30 mins
   };
 
   try {
