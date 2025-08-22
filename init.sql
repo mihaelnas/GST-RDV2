@@ -1,20 +1,13 @@
--- Drop tables if they exist to ensure a clean slate.
--- The order is important due to foreign key constraints.
+-- Ce script initialise la base de données pour la clinique.
+-- Il supprime les anciennes tables si elles existent et les recrée avec des données de départ.
+
+-- Supprimer les tables existantes dans le bon ordre pour éviter les erreurs de contrainte de clé étrangère.
 DROP TABLE IF EXISTS appointments;
 DROP TABLE IF EXISTS clinic_staff;
 DROP TABLE IF EXISTS doctors;
 DROP TABLE IF EXISTS patients;
 
--- Create Patients Table
-CREATE TABLE patients (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    full_name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Create Doctors Table
+-- Création de la table des Médecins
 CREATE TABLE doctors (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
@@ -24,45 +17,62 @@ CREATE TABLE doctors (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create Clinic Staff Table
+-- Création de la table des Patients
+CREATE TABLE patients (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    full_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Création de la table du Personnel de la Clinique
 CREATE TABLE clinic_staff (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(50) NOT NULL DEFAULT 'clinic_staff', -- e.g., 'admin', 'receptionist'
+    role VARCHAR(50) NOT NULL DEFAULT 'clinic_staff',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create Appointments Table
+-- Création de la table des Rendez-vous
+-- ON DELETE SET NULL: si un patient ou un médecin est supprimé, le rendez-vous est conservé mais la référence est supprimée.
 CREATE TABLE appointments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     date_time TIMESTAMP WITH TIME ZONE NOT NULL,
     patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
     doctor_id UUID REFERENCES doctors(id) ON DELETE SET NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'En attente', -- e.g., 'En attente', 'Confirmé', 'Annulé', 'Payée'
+    status VARCHAR(50) NOT NULL DEFAULT 'En attente', -- Ex: 'En attente', 'Confirmé', 'Annulé', 'Payée'
     duration_minutes INTEGER NOT NULL DEFAULT 30,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Insertion des données initiales
 
--- Seed Data
+-- Mot de passe pour tous les utilisateurs : "password"
+-- Hash (bcrypt, coût 10): $2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q
 
--- Patients (passwords are 'password123' hashed)
-INSERT INTO patients (id, full_name, email, password_hash) VALUES
-('a123b456-c789-d012-e345-f67890123456', 'Marie Curie', 'marie.curie@example.com', '$2a$10$w4B.g2YDBY.5rA.VpZzUe.CzQZG.a.1D.2F/w.p4g7I.g3R8E5pG.'),
-('b238a1a3-6e3e-4e48-9f37-14e3e3e3e3e3', 'Jean Valjean', 'jean.valjean@example.com', '$2a$10$w4B.g2YDBY.5rA.VpZzUe.CzQZG.a.1D.2F/w.p4g7I.g3R8E5pG.');
+-- Insertion du personnel de la clinique
+INSERT INTO clinic_staff (id, full_name, email, password_hash) VALUES
+('00000000-0000-0000-0000-000000000001', 'Admin Clinique', 'staff@clinic.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q');
 
--- Doctors (passwords are 'password123' hashed)
+-- Insertion des médecins
 INSERT INTO doctors (id, full_name, specialty, email, password_hash) VALUES
-('c85e28a9-4089-41a3-8f7d-249e1a8e1e33', 'Dr. Chloé Lambert', 'Cardiologie', 'chloe.lambert@clinique.fr', '$2a$10$w4B.g2YDBY.5rA.VpZzUe.CzQZG.a.1D.2F/w.p4g7I.g3R8E5pG.'),
-('5915446d-9c3f-4d43-9a4c-530999581f14', 'Dr. Alice Martin', 'Pédiatrie', 'alice.martin@clinique.fr', '$2a$10$w4B.g2YDBY.5rA.VpZzUe.CzQZG.a.1D.2F/w.p4g7I.g3R8E5pG.');
+('c85e28a9-4089-41a3-8f7d-249e1a8e1e33', 'Dr. Chloé Lambert', 'Cardiologie', 'chloe.lambert@clinic.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q'),
+('5915446d-9c3f-4d43-9a4c-530999581f14', 'Dr. Alice Martin', 'Dermatologie', 'alice.martin@clinic.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q');
 
--- Clinic Staff (password is 'password123' hashed)
-INSERT INTO clinic_staff (id, full_name, email, password_hash, role) VALUES
-('d456e789-f012-g345-h678-i90123456789', 'Sophie Bernard', 'sophie.bernard@clinique.fr', '$2a$10$w4B.g2YDBY.5rA.VpZzUe.CzQZG.a.1D.2F/w.p4g7I.g3R8E5pG.', 'clinic_staff');
+-- Insertion des patients
+INSERT INTO patients (id, full_name, email, password_hash) VALUES
+('a123b456-c789-d012-e345-f67890123456', 'Marie Curie', 'marie.curie@email.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q'),
+('b238a1a3-6e3e-4e48-9f37-14e3e3e3e3e3', 'Jean Valjean', 'jean.valjean@email.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q');
 
--- Appointments
+-- Insertion des rendez-vous
+-- Assurez-vous que les UUIDs correspondent à ceux des médecins et patients ci-dessus.
 INSERT INTO appointments (date_time, patient_id, doctor_id, status, duration_minutes) VALUES
-(NOW() + INTERVAL '1 day', (SELECT id from patients where email = 'marie.curie@example.com'), (SELECT id from doctors where email = 'chloe.lambert@clinique.fr'), 'Confirmé', 30),
-(NOW() + INTERVAL '2 days', (SELECT id from patients where email = 'jean.valjean@example.com'), (SELECT id from doctors where email = 'alice.martin@clinique.fr'), 'En attente', 45);
+-- Rendez-vous Passé et Payé
+(NOW() - INTERVAL '3 day', 'b238a1a3-6e3e-4e48-9f37-14e3e3e3e3e3', '5915446d-9c3f-4d43-9a4c-530999581f14', 'Payée', 30),
+-- Rendez-vous à venir Confirmé
+(NOW() + INTERVAL '2 day', 'b238a1a3-6e3e-4e48-9f37-14e3e3e3e3e3', '5915446d-9c3f-4d43-9a4c-530999581f14', 'Confirmé', 30),
+-- Rendez-vous à venir En attente
+(NOW() + INTERVAL '4 day', 'a123b456-c789-d012-e345-f67890123456', 'c85e28a9-4089-41a3-8f7d-249e1a8e1e33', 'En attente', 30);
