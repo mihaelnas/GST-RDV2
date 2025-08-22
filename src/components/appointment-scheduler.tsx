@@ -245,13 +245,13 @@ export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: Ap
       <Card className="bg-card shadow-lg rounded-xl overflow-hidden">
         <CardHeader className="bg-muted/30 p-6 border-b">
             <CardTitle className="text-2xl font-headline text-primary flex items-center"><CalendarIcon className="mr-3 h-6 w-6" />Planifier votre Rendez-vous</CardTitle>
-            <CardDescription>{isLoggedIn ? "Choisissez un médecin, une date et un créneau horaire." : "Connectez-vous pour choisir un médecin, une date et un créneau horaire."}</CardDescription>
+            <CardDescription>{isLoggedIn ? "Choisissez un médecin, une date et un créneau horaire." : "Choisissez un médecin et une date pour voir les créneaux disponibles."}</CardDescription>
         </CardHeader>
         <CardContent className="p-6 space-y-8">
             <div>
                 <h3 className="text-lg font-semibold mb-3 text-foreground flex items-center"><User className="mr-2 h-5 w-5 text-primary"/>Sélectionnez un médecin :</h3>
                 {isLoadingDoctors ? <Loader2 className="h-6 w-6 animate-spin"/> :
-                <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId} disabled={!isLoggedIn}>
+                <Select value={selectedDoctorId} onValueChange={setSelectedDoctorId}>
                     <SelectTrigger className="w-full sm:w-[320px] text-base py-3 shadow-sm"><SelectValue placeholder="Choisir un médecin" /></SelectTrigger>
                     <SelectContent>{allDoctors.map(doc => <SelectItem key={doc.id} value={doc.id}>{doc.fullName} - {doc.specialty}</SelectItem>)}</SelectContent>
                 </Select>}
@@ -261,7 +261,7 @@ export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: Ap
                 <h3 className="text-lg font-semibold mb-3 text-foreground flex items-center"><CalendarDays className="mr-2 h-5 w-5 text-primary"/>Sélectionnez une date :</h3>
                 <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
                 <PopoverTrigger asChild>
-                    <Button variant={"outline"} className={cn("w-full sm:w-[320px] justify-start text-left font-normal text-base py-3 shadow-sm",!selectedDate && "text-muted-foreground")} disabled={!isLoggedIn || !selectedDoctorId}>
+                    <Button variant={"outline"} className={cn("w-full sm:w-[320px] justify-start text-left font-normal text-base py-3 shadow-sm",!selectedDate && "text-muted-foreground")} disabled={!selectedDoctorId}>
                         <CalendarDays className="mr-3 h-5 w-5 text-primary" />
                         {selectedDate ? format(selectedDate, "PPPP", { locale: fr }) : <span>Choisissez une date</span>}
                     </Button>
@@ -294,7 +294,7 @@ export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: Ap
                     <Card key={app.id} className={cn("shadow-md hover:shadow-lg transition-all duration-300 flex flex-col text-center group", animateId === app.id ? "animate-out fade-out-50 duration-500" : "animate-in fade-in-0 duration-500")}>
                         <CardHeader className="pb-2 pt-4 flex-grow"><CardTitle className="text-lg font-medium">{format(app.dateTime, 'HH:mm', { locale: fr })}</CardTitle><CardDescription className="text-xs">{format(new Date(app.dateTime.getTime() + app.durationMinutes * 60000), 'HH:mm', { locale: fr })}</CardDescription></CardHeader>
                         <CardFooter className="p-3">
-                        <Button variant={isLoggedIn ? "default" : "secondary"} size="sm" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground group-hover:scale-105 transition-transform" onClick={() => handleOpenDialog(app)} disabled={!isLoggedIn}>
+                        <Button variant={isLoggedIn ? "default" : "secondary"} size="sm" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground group-hover:scale-105 transition-transform" onClick={() => handleOpenDialog(app)}>
                             <CalendarCheck className="mr-2 h-4 w-4" />{isLoggedIn ? "Réserver" : "Se connecter"}
                         </Button>
                         </CardFooter>
