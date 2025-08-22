@@ -8,11 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Header from '@/components/header';
 import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
-import { CalendarPlus, ArrowLeft, Trash2, Clock, CheckCircle, ListChecks, CalendarOff, Save } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { CalendarPlus, ArrowLeft, Trash2, Clock, CheckCircle, ListChecks, CalendarOff, Save, Loader2 } from 'lucide-react';
 import { useForm, SubmitHandler, useFieldArray, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { format, parseISO, parse, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -20,48 +20,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { LoginOutput } from '@/ai/schemas/authSchemas';
+import { 
+  getDoctorAvailability, 
+  updateWeeklySchedule, 
+  addAbsence, 
+  deleteAbsence,
+} from '@/ai/flows/availabilityFlow';
+import { WeeklyScheduleSchema as serverWeeklyScheduleSchema } from '@/ai/schemas/availabilitySchemas';
+import type { Absence, WeeklyScheduleFormValues, AbsenceCreateInput } from '@/ai/schemas/availabilitySchemas';
 
-
-export interface DayOfWeek {
-  dayName: string;
-  isWorkingDay: boolean;
-  startTime?: string;
-  endTime?: string;
-}
-
-const dayOfWeekSchema = z.object({
-  dayName: z.string(),
-  isWorkingDay: z.boolean(),
-  startTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Format HH:MM requis." }).optional().or(z.literal('')),
-  endTime: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/, { message: "Format HH:MM requis." }).optional().or(z.literal('')),
-}).refine(data => {
-  if (data.isWorkingDay) {
-    if (!data.startTime || data.startTime.trim() === '') return false;
-    if (!data.endTime || data.endTime.trim() === '') return false;
-    try {
-      const start = parse(data.startTime, 'HH:mm', new Date());
-      const end = parse(data.endTime, 'HH:mm', new Date());
-      return start < end;
-    } catch (e) {
-      return false; 
-    }
-  }
-  return true; 
-}, {
-  message: "Si le jour est travaillé, les heures de début et de fin sont requises et le début doit précéder la fin.",
-  path: ["startTime"], 
-});
-
-
-const weeklyScheduleSchema = z.object({
-  schedule: z.array(dayOfWeekSchema),
-});
-
-type WeeklyScheduleFormValues = z.infer<typeof weeklyScheduleSchema>;
-
-const absenceSchema = z.object({
+// Re-map Zod schemas for client-side form validation
+const clientWeeklyScheduleSchema = serverWeeklyScheduleSchema;
+const clientAbsenceSchema = z.object({
   date: z.string().min(1, { message: "La date est requise."}).refine(date => {
-    // Compare dates at the start of the day to avoid timezone issues
     return startOfDay(new Date(date)) >= startOfDay(new Date());
   }, {
     message: "La date d'absence ne peut pas être dans le passé.",
@@ -87,31 +58,7 @@ const absenceSchema = z.object({
   path: ["startTime"],
 });
 
-type AbsenceFormValues = z.infer<typeof absenceSchema>;
-
-interface Absence extends AbsenceFormValues {
-  id: string;
-}
-
-const daysOfWeekList = [
-  { name: "Lundi", index: 1 },
-  { name: "Mardi", index: 2 },
-  { name: "Mercredi", index: 3 },
-  { name: "Jeudi", index: 4 },
-  { name: "Vendredi", index: 5 },
-  { name: "Samedi", index: 6 },
-  { name: "Dimanche", index: 0 },
-];
-
-const defaultDoctorWeeklySchedule = (): WeeklyScheduleFormValues => ({
-  schedule: daysOfWeekList.map(day => ({
-    dayName: day.name,
-    isWorkingDay: day.index >= 1 && day.index <= 5, // Monday to Friday by default
-    startTime: day.index >= 1 && day.index <= 5 ? "09:00" : "",
-    endTime: day.index >= 1 && day.index <= 5 ? "17:00" : "",
-  })),
-});
-
+type ClientAbsenceFormValues = z.infer<typeof clientAbsenceSchema>;
 
 export default function DoctorAvailabilityPage() {
   const router = useRouter();
@@ -119,17 +66,18 @@ export default function DoctorAvailabilityPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [doctor, setDoctor] = useState<LoginOutput | null>(null);
   const [absences, setAbsences] = useState<Absence[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const { control: weeklyControl, register: weeklyRegister, handleSubmit: handleWeeklySubmit, formState: { errors: weeklyErrors }, reset: weeklyReset, watch: watchWeeklySchedule } = useForm<WeeklyScheduleFormValues>({
-    resolver: zodResolver(weeklyScheduleSchema),
+    resolver: zodResolver(clientWeeklyScheduleSchema),
   });
   const { fields: weeklyFields } = useFieldArray({
     control: weeklyControl,
     name: "schedule",
   });
 
-  const { control: absenceControl, register: absenceRegister, handleSubmit: handleAbsenceSubmit, formState: { errors: absenceErrors }, reset: absenceReset, watch: watchAbsenceForm } = useForm<AbsenceFormValues>({
-    resolver: zodResolver(absenceSchema),
+  const { control: absenceControl, register: absenceRegister, handleSubmit: handleAbsenceSubmit, formState: { errors: absenceErrors }, reset: absenceReset, watch: watchAbsenceForm } = useForm<ClientAbsenceFormValues>({
+    resolver: zodResolver(clientAbsenceSchema),
     defaultValues: { isFullDay: true, date: '', startTime: '', endTime: '', reason: '' },
   });
   
@@ -138,39 +86,38 @@ export default function DoctorAvailabilityPage() {
   useEffect(() => {
     const userJson = sessionStorage.getItem('loggedInUser');
     if (userJson) {
-        const user = JSON.parse(userJson);
-        if (user.role === 'doctor') {
-            setDoctor(user);
-            setIsLoggedIn(true);
-
-            // Load this doctor's schedule from localStorage
-            try {
-                const allSchedules = JSON.parse(localStorage.getItem('doctorSchedules') || '{}');
-                const mySchedule = allSchedules[user.fullName];
-                weeklyReset(mySchedule?.weeklySchedule ? { schedule: mySchedule.weeklySchedule } : defaultDoctorWeeklySchedule());
-                setAbsences(mySchedule?.absences || []);
-            } catch (e) {
-                weeklyReset(defaultDoctorWeeklySchedule());
-                setAbsences([]);
-            }
-        } else {
-            router.push('/login');
-        }
+      const user = JSON.parse(userJson);
+      if (user.role === 'doctor') {
+        setDoctor(user);
+        setIsLoggedIn(true);
+      } else {
+        router.push('/login');
+      }
     } else {
       router.push('/login');
     }
-  }, [router, weeklyReset]);
+  }, [router]);
 
-  const saveSchedulesToLocalStorage = (scheduleData: { weeklySchedule: DayOfWeek[], absences: Absence[] }) => {
+  const fetchAvailability = useCallback(async () => {
     if (!doctor) return;
+    setIsLoading(true);
     try {
-        const allSchedules = JSON.parse(localStorage.getItem('doctorSchedules') || '{}');
-        allSchedules[doctor.fullName] = scheduleData;
-        localStorage.setItem('doctorSchedules', JSON.stringify(allSchedules));
-    } catch(e) {
-        console.error("Failed to save schedule to localStorage", e);
+      const availability = await getDoctorAvailability(doctor.id);
+      weeklyReset({ schedule: availability.weeklySchedule });
+      setAbsences(availability.absences);
+    } catch (error) {
+      console.error("Failed to fetch availability:", error);
+      toast({ title: "Erreur", description: "Impossible de charger vos disponibilités.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [doctor, weeklyReset, toast]);
+
+  useEffect(() => {
+    if (doctor) {
+      fetchAvailability();
+    }
+  }, [doctor, fetchAvailability]);
 
 
   const handleLogout = () => {
@@ -179,44 +126,68 @@ export default function DoctorAvailabilityPage() {
     router.push('/');
   };
 
-  const onWeeklySubmit: SubmitHandler<WeeklyScheduleFormValues> = (data) => {
-    saveSchedulesToLocalStorage({ weeklySchedule: data.schedule, absences });
-    toast({
-      title: "Horaire Hebdomadaire Enregistré",
-      description: "Votre horaire hebdomadaire récurrent a été mis à jour.",
-      className: "bg-accent text-accent-foreground",
-    });
+  const onWeeklySubmit: SubmitHandler<WeeklyScheduleFormValues> = async (data) => {
+    if (!doctor) return;
+    try {
+      await updateWeeklySchedule(doctor.id, data.schedule);
+      toast({
+        title: "Horaire Hebdomadaire Enregistré",
+        description: "Votre horaire hebdomadaire récurrent a été mis à jour dans la base de données.",
+        className: "bg-accent text-accent-foreground",
+      });
+      fetchAvailability();
+    } catch(error: any) {
+      console.error("Failed to save weekly schedule:", error);
+      toast({ title: "Erreur", description: error.message || "Impossible de sauvegarder l'horaire.", variant: "destructive" });
+    }
   };
 
-  const onAbsenceSubmit: SubmitHandler<AbsenceFormValues> = (data) => {
-    const newAbsence: Absence = { id: `abs${Date.now()}`, ...data };
-    const updatedAbsences = [...absences, newAbsence].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    setAbsences(updatedAbsences);
-    
-    const currentWeeklySchedule = weeklyControl._getWatch('schedule');
-    saveSchedulesToLocalStorage({ weeklySchedule: currentWeeklySchedule, absences: updatedAbsences });
-
-    toast({
-      title: "Absence Ajoutée",
-      description: `Absence pour le ${format(parseISO(data.date), "d MMM yyyy", { locale: fr })} ajoutée.`,
-      className: "bg-accent text-accent-foreground",
-    });
-    absenceReset({ date: '', isFullDay: true, startTime: '', endTime: '', reason: '' });
+  const onAbsenceSubmit: SubmitHandler<ClientAbsenceFormValues> = async (data) => {
+    if (!doctor) return;
+    try {
+      const absenceInput: AbsenceCreateInput = {
+        doctorId: doctor.id,
+        ...data,
+      };
+      await addAbsence(absenceInput);
+      toast({
+        title: "Absence Ajoutée",
+        description: `Absence pour le ${format(parseISO(data.date), "d MMM yyyy", { locale: fr })} ajoutée.`,
+        className: "bg-accent text-accent-foreground",
+      });
+      fetchAvailability(); // Refresh the whole availability data
+      absenceReset({ date: '', isFullDay: true, startTime: '', endTime: '', reason: '' });
+    } catch (error: any) {
+      console.error("Failed to add absence:", error);
+      toast({ title: "Erreur", description: error.message || "Impossible d'ajouter l'absence.", variant: "destructive" });
+    }
   };
 
-  const handleDeleteAbsence = (id: string) => {
-    const updatedAbsences = absences.filter(a => a.id !== id);
-    setAbsences(updatedAbsences);
-    
-    const currentWeeklySchedule = weeklyControl._getWatch('schedule');
-    saveSchedulesToLocalStorage({ weeklySchedule: currentWeeklySchedule, absences: updatedAbsences });
-
-    toast({
-        title: "Absence Supprimée",
-        description: "L'absence a été supprimée.",
-        variant: "destructive",
-    });
+  const handleDeleteAbsence = async (id: string) => {
+    try {
+      await deleteAbsence(id);
+      toast({
+          title: "Absence Supprimée",
+          description: "L'absence a été supprimée.",
+          variant: "destructive",
+      });
+      fetchAvailability(); // Refresh
+    } catch (error: any) {
+      console.error("Failed to delete absence:", error);
+      toast({ title: "Erreur", description: error.message || "Impossible de supprimer l'absence.", variant: "destructive" });
+    }
   };
+  
+  if (isLoading) {
+    return (
+        <div className="min-h-screen bg-background flex flex-col">
+            <Header isLoggedIn={isLoggedIn} onLogout={handleLogout} />
+            <div className="flex-grow flex items-center justify-center">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+            </div>
+        </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -241,12 +212,10 @@ export default function DoctorAvailabilityPage() {
               <form onSubmit={handleWeeklySubmit(onWeeklySubmit)} className="space-y-6">
                   {weeklyFields.map((field, index) => {
                       const currentDayValues = watchWeeklySchedule(`schedule.${index}`);
-                      const hasStartTimeError = !!weeklyErrors.schedule?.[index]?.startTime;
-                      const hasEndTimeError = !!weeklyErrors.schedule?.[index]?.endTime;
-                      const isMissingTimeIfWorking = currentDayValues.isWorkingDay && (!currentDayValues.startTime || !currentDayValues.endTime);
+                      const hasError = !!weeklyErrors.schedule?.[index];
                       
                       return (
-                        <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 items-center gap-4 p-3 border rounded-md bg-card hover:bg-muted/30 transition-colors">
+                        <div key={field.id} className={cn("grid grid-cols-1 md:grid-cols-4 items-center gap-4 p-3 border rounded-md bg-card hover:bg-muted/30 transition-colors", hasError && "border-destructive")}>
                             <div className="md:col-span-1 flex items-center space-x-3">
                                 <Controller
                                     name={`schedule.${index}.isWorkingDay`}
@@ -268,11 +237,7 @@ export default function DoctorAvailabilityPage() {
                                     type="time" 
                                     {...weeklyRegister(`schedule.${index}.startTime`)} 
                                     disabled={!currentDayValues.isWorkingDay}
-                                    className={cn(
-                                      (hasStartTimeError || (isMissingTimeIfWorking && !hasEndTimeError)) ? "border-destructive" : ""
-                                    )}
                                 />
-                                
                             </div>
                             <div className="md:col-span-1">
                                 <Label htmlFor={`schedule.${index}.endTime`}>Heure de fin</Label>
@@ -281,14 +246,11 @@ export default function DoctorAvailabilityPage() {
                                     type="time" 
                                     {...weeklyRegister(`schedule.${index}.endTime`)} 
                                     disabled={!currentDayValues.isWorkingDay}
-                                     className={cn(
-                                      (hasEndTimeError || (isMissingTimeIfWorking && !hasStartTimeError)) ? "border-destructive" : ""
-                                    )}
                                 />
                             </div>
-                             {weeklyErrors.schedule?.[index] && (
+                             {hasError && (
                                 <p className="text-sm text-destructive md:col-span-4 text-center -mt-2">
-                                    {weeklyErrors.schedule[index]?.startTime?.message || weeklyErrors.schedule[index]?.endTime?.message || (isMissingTimeIfWorking ? "Les heures de début et de fin sont requises si le jour est travaillé." : "")}
+                                  {weeklyErrors.schedule?.[index]?.root?.message}
                                 </p>
                              )}
                         </div>

@@ -28,13 +28,13 @@ import type { AppointmentNotificationInput } from '@/ai/flows/notificationFlow';
 import { listDoctors, type Doctor } from '@/ai/flows/doctorManagementFlow';
 import { listAppointments, createAppointment, type AppointmentCreateInput } from '@/ai/flows/appointmentManagementFlow';
 import type { BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
+import { getDoctorAvailability, type DoctorAvailability } from '@/ai/flows/availabilityFlow';
 import type { LoginOutput } from '@/ai/schemas/authSchemas';
-import type { DayOfWeek } from '@/app/doctor/availability/page'; // Re-use type from availability page
+
 
 interface AppointmentSlot {
   id: string;
   dateTime: Date;
-  durationMinutes: number;
   isBooked: boolean;
   doctorId?: string;
   doctorName?: string;
@@ -42,32 +42,30 @@ interface AppointmentSlot {
 
 interface AppointmentSchedulerProps {
   isLoggedIn: boolean;
-  doctorSchedules: Record<string, { weeklySchedule: DayOfWeek[], absences: any[] }>;
 }
 
 const generateAppointmentsForDate = (
   date: Date,
   globalBookings: BookedAppointment[],
   selectedDoctor?: Doctor,
-  doctorSchedules?: Record<string, { weeklySchedule: DayOfWeek[], absences: any[] }>
+  doctorAvailability?: DoctorAvailability
 ): AppointmentSlot[] => {
   const appointments: AppointmentSlot[] = [];
   const targetDate = startOfDay(date);
-  const dayOfWeekIndex = getDay(targetDate);
-  const dayNames = ["Dimanche", "Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi"];
-  const currentDayName = dayNames[dayOfWeekIndex];
+  const dayOfWeekIndex = getDay(targetDate); // Sunday = 0, Monday = 1...
+  const isoDayOfWeek = dayOfWeekIndex === 0 ? 7 : dayOfWeekIndex; // Convert to ISO standard: Monday = 1, Sunday = 7
 
   if (isPast(targetDate) && !isEqual(targetDate, startOfDay(new Date()))) return [];
-  if (!selectedDoctor || !doctorSchedules) return [];
+  if (!selectedDoctor || !doctorAvailability) return [];
   
-  const schedule = doctorSchedules[selectedDoctor.fullName];
-  if (!schedule) return []; // No schedule found for this doctor
+  const schedule = doctorAvailability;
 
-  let doctorWorkDay = schedule.weeklySchedule.find((d:any) => d.dayName === currentDayName);
+  let doctorWorkDay = schedule.weeklySchedule.find((d:any) => d.dayOfWeek === isoDayOfWeek);
 
   if (!doctorWorkDay || !doctorWorkDay.isWorkingDay || !doctorWorkDay.startTime || !doctorWorkDay.endTime) return [];
 
-  const fullDayAbsence = schedule.absences.find((abs:any) => isEqual(startOfDay(parse(abs.date, 'yyyy-MM-dd', new Date())), targetDate) && abs.isFullDay);
+  // Check for full-day absences
+  const fullDayAbsence = schedule.absences.find((abs:any) => isEqual(startOfDay(parseISO(abs.date)), targetDate) && abs.isFullDay);
   if (fullDayAbsence) return [];
 
   const interval = 30;
@@ -81,12 +79,16 @@ const generateAppointmentsForDate = (
       const slotDateTime = set(targetDate, { hours: hour, minutes: minute, seconds: 0, milliseconds: 0 });
       if (isEqual(targetDate, startOfDay(new Date())) && slotDateTime.getTime() <= new Date().getTime()) continue;
 
+      // Check for partial absences
       let isPartialAbsence = false;
-      const partialAbsence = schedule.absences.find((abs:any) => isEqual(startOfDay(parse(abs.date, 'yyyy-MM-dd', new Date())), targetDate) && !abs.isFullDay && abs.startTime && abs.endTime);
-      if (partialAbsence) {
+      const partialAbsences = schedule.absences.filter((abs:any) => isEqual(startOfDay(parseISO(abs.date)), targetDate) && !abs.isFullDay && abs.startTime && abs.endTime);
+      for(const partialAbsence of partialAbsences) {
         const absenceStartDateTime = set(targetDate, { hours: parseInt(partialAbsence.startTime!.split(':')[0]), minutes: parseInt(partialAbsence.startTime!.split(':')[1])});
         const absenceEndDateTime = set(targetDate, { hours: parseInt(partialAbsence.endTime!.split(':')[0]), minutes: parseInt(partialAbsence.endTime!.split(':')[1])});
-        if (slotDateTime >= absenceStartDateTime && slotDateTime < absenceEndDateTime) isPartialAbsence = true;
+        if (slotDateTime >= absenceStartDateTime && slotDateTime < absenceEndDateTime) {
+          isPartialAbsence = true;
+          break;
+        }
       }
       if (isPartialAbsence) continue;
 
@@ -98,7 +100,6 @@ const generateAppointmentsForDate = (
       appointments.push({
         id: format(slotDateTime, 'yyyyMMddHHmm') + `_doc${selectedDoctor.id}`,
         dateTime: slotDateTime,
-        durationMinutes: interval,
         isBooked: isAlreadyBooked,
         doctorId: selectedDoctor.id,
         doctorName: selectedDoctor.fullName,
@@ -108,7 +109,7 @@ const generateAppointmentsForDate = (
   return appointments.sort((a, b) => a.dateTime.getTime() - b.dateTime.getTime());
 };
 
-export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: AppointmentSchedulerProps) {
+export default function AppointmentScheduler({ isLoggedIn }: AppointmentSchedulerProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [availableSlots, setAvailableSlots] = useState<AppointmentSlot[]>([]);
   const [allBookedAppointments, setAllBookedAppointments] = useState<BookedAppointment[]>([]);
@@ -116,7 +117,11 @@ export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: Ap
   const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
   const [isLoadingDoctors, setIsLoadingDoctors] = useState(true);
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | undefined>();
+  const [doctorAvailabilities, setDoctorAvailabilities] = useState<Record<string, DoctorAvailability>>({});
+  
   const selectedDoctor = useMemo(() => allDoctors.find(doc => doc.id === selectedDoctorId), [selectedDoctorId, allDoctors]);
+  const selectedDoctorAvailability = useMemo(() => selectedDoctorId ? doctorAvailabilities[selectedDoctorId] : undefined, [selectedDoctorId, doctorAvailabilities]);
+
   const [patient, setPatient] = useState<LoginOutput | null>(null);
 
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
@@ -160,7 +165,6 @@ export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: Ap
   }, [toast]);
 
   const fetchAllBookedAppointments = useCallback(async () => {
-    setIsLoadingSlots(true);
     try {
       const bookings = await listAppointments();
       setAllBookedAppointments(bookings.map(b => ({...b, dateTime: b.dateTime})));
@@ -171,8 +175,6 @@ export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: Ap
           description: "Impossible de charger les rendez-vous existants.",
           variant: "destructive"
         });
-    } finally {
-        setIsLoadingSlots(false);
     }
   }, [toast]);
 
@@ -181,14 +183,32 @@ export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: Ap
     fetchAllBookedAppointments();
   }, [fetchDoctors, fetchAllBookedAppointments]);
 
+  // Fetch availability for the selected doctor
   useEffect(() => {
-    if (selectedDoctor) {
-        const generatedSlots = generateAppointmentsForDate(selectedDate, allBookedAppointments, selectedDoctor, doctorSchedules);
+    const fetchAvailability = async () => {
+      if (!selectedDoctorId || doctorAvailabilities[selectedDoctorId]) return;
+      setIsLoadingSlots(true);
+      try {
+        const availability = await getDoctorAvailability(selectedDoctorId);
+        setDoctorAvailabilities(prev => ({ ...prev, [selectedDoctorId]: availability }));
+      } catch (error) {
+        console.error(`Failed to fetch availability for doctor ${selectedDoctorId}:`, error);
+        toast({ title: "Erreur", description: `Impossible de charger les disponibilités du médecin.`, variant: "destructive" });
+      } finally {
+        setIsLoadingSlots(false);
+      }
+    };
+    fetchAvailability();
+  }, [selectedDoctorId, toast, doctorAvailabilities]);
+
+  useEffect(() => {
+    if (selectedDoctor && selectedDoctorAvailability) {
+        const generatedSlots = generateAppointmentsForDate(selectedDate, allBookedAppointments, selectedDoctor, selectedDoctorAvailability);
         setAvailableSlots(generatedSlots);
     } else {
         setAvailableSlots([]);
     }
-  }, [selectedDate, allBookedAppointments, selectedDoctor, doctorSchedules]);
+  }, [selectedDate, allBookedAppointments, selectedDoctor, selectedDoctorAvailability]);
 
 
   const handleOpenDialog = (appointment: AppointmentSlot) => {
@@ -279,7 +299,7 @@ export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: Ap
                         mode="single" 
                         selected={selectedDate} 
                         onSelect={(date) => {
-                            if (date) { // Only update if a date is selected, preventing undefined.
+                            if (date) {
                                 setSelectedDate(date);
                                 setPopoverOpen(false);
                             }
@@ -300,7 +320,7 @@ export default function AppointmentScheduler({ isLoggedIn, doctorSchedules }: Ap
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                     {availableSlots.filter(app => !app.isBooked).map(app => (
                     <Card key={app.id} className={cn("shadow-md hover:shadow-lg transition-all duration-300 flex flex-col text-center group", animateId === app.id ? "animate-out fade-out-50 duration-500" : "animate-in fade-in-0 duration-500")}>
-                        <CardHeader className="pb-2 pt-4 flex-grow"><CardTitle className="text-lg font-medium">{format(app.dateTime, 'HH:mm', { locale: fr })}</CardTitle><CardDescription className="text-xs">{format(new Date(app.dateTime.getTime() + app.durationMinutes * 60000), 'HH:mm', { locale: fr })}</CardDescription></CardHeader>
+                        <CardHeader className="pb-2 pt-4 flex-grow"><CardTitle className="text-lg font-medium">{format(app.dateTime, 'HH:mm', { locale: fr })}</CardTitle></CardHeader>
                         <CardFooter className="p-3">
                         <Button variant={isLoggedIn ? "default" : "secondary"} size="sm" className="w-full bg-accent hover:bg-accent/90 text-accent-foreground group-hover:scale-105 transition-transform" onClick={() => handleOpenDialog(app)}>
                             <CalendarCheck className="mr-2 h-4 w-4" />{isLoggedIn ? "Réserver" : "Se connecter"}

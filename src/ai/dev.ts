@@ -6,3 +6,4 @@ import './flows/notificationFlow';
 import './flows/appointmentManagementFlow';
 import './flows/authenticationFlow';
 import './flows/healthCheckFlow';
+import './flows/availabilityFlow';

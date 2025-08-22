@@ -8,18 +8,12 @@ import Header from '@/components/header';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import Image from 'next/image';
-import type { DayOfWeek } from '@/app/doctor/availability/page';
 import { useToast } from '@/hooks/use-toast';
 import { checkDatabaseConnection } from '@/ai/flows/healthCheckFlow';
-import { listDoctors } from '@/ai/flows/doctorManagementFlow';
 
-// In a real app, this would be fetched from a central store or context
-// that gets its data from the database. For now, we manage it in the root page state.
-const initialDoctorSchedules: Record<string, { weeklySchedule: DayOfWeek[], absences: any[] }> = {};
 
 export default function HomePage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [doctorSchedules, setDoctorSchedules] = useState(initialDoctorSchedules);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -45,47 +39,6 @@ export default function HomePage() {
       }
     };
     verifyDbConnection();
-  }, [toast]);
-
-
-  // Effect to load schedules from localStorage on mount
-  useEffect(() => {
-    const loadSchedules = async () => {
-        try {
-            const savedSchedules = localStorage.getItem('doctorSchedules');
-            if (savedSchedules) {
-                setDoctorSchedules(JSON.parse(savedSchedules));
-            } else {
-                // If nothing is saved, fetch doctors and create a default schedule
-                const doctors = await listDoctors();
-                const initialSchedules: Record<string, { weeklySchedule: DayOfWeek[], absences: any[] }> = {};
-                doctors.forEach(doc => {
-                    initialSchedules[doc.fullName] = {
-                        weeklySchedule: [
-                            { dayName: 'Lundi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
-                            { dayName: 'Mardi', isWorkingDay: true, startTime: '09:00', endTime: '17:00' },
-                            { dayName: 'Mercredi', isWorkingDay: false, startTime: '', endTime: '' },
-                            { dayName: 'Jeudi', isWorkingDay: true, startTime: '10:00', endTime: '18:00' },
-                            { dayName: 'Vendredi', isWorkingDay: true, startTime: '09:00', endTime: '13:00' },
-                            { dayName: 'Samedi', isWorkingDay: false, startTime: '', endTime: '' },
-                            { dayName: 'Dimanche', isWorkingDay: false, startTime: '', endTime: '' },
-                        ],
-                        absences: []
-                    };
-                });
-                setDoctorSchedules(initialSchedules);
-                localStorage.setItem('doctorSchedules', JSON.stringify(initialSchedules));
-            }
-        } catch (error) {
-            console.error("Could not load or initialize doctor schedules:", error);
-            toast({
-                title: "Erreur de chargement des plannings",
-                description: "Impossible de récupérer la liste des médecins pour initialiser les plannings.",
-                variant: "destructive"
-            });
-        }
-    };
-    loadSchedules();
   }, [toast]);
 
   const handleLogout = () => {
@@ -144,7 +97,7 @@ export default function HomePage() {
           </div>
         </section>
         
-        <AppointmentScheduler isLoggedIn={isLoggedIn} doctorSchedules={doctorSchedules} />
+        <AppointmentScheduler isLoggedIn={isLoggedIn} />
       </main>
 
       <footer className="py-8 text-center text-muted-foreground border-t mt-12">
