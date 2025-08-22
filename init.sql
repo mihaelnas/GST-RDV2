@@ -1,16 +1,24 @@
--- This script initializes the database for the Clinique Rendez-Vous app.
--- It creates the necessary tables and seeds them with initial data.
+-- Ce script est conçu pour être exécuté sur une base de données PostgreSQL.
+-- Il crée les tables nécessaires pour l'application de clinique et insère des données d'exemple.
+--
+-- Pour exécuter ce script :
+-- 1. Assurez-vous que PostgreSQL est installé et en cours d'exécution.
+-- 2. Créez un utilisateur et une base de données, par exemple via psql :
+--    CREATE USER clinic_user WITH PASSWORD 'clinic_password';
+--    CREATE DATABASE clinic_db OWNER clinic_user;
+-- 3. Connectez-vous à votre base de données et exécutez ce script, par exemple :
+--    psql -U clinic_user -d clinic_db -f init.sql
 
--- Enable the pgcrypto extension to generate UUIDs
+-- Active l'extension pour générer des UUIDs si elle n'est pas déjà activée.
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Drop existing tables to start fresh
+-- Supprime les anciennes tables si elles existent pour garantir un démarrage propre.
 DROP TABLE IF EXISTS appointments;
 DROP TABLE IF EXISTS clinic_staff;
 DROP TABLE IF EXISTS doctors;
 DROP TABLE IF EXISTS patients;
 
--- Create the doctors table
+-- Table des Médecins
 CREATE TABLE doctors (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
@@ -19,7 +27,7 @@ CREATE TABLE doctors (
     password_hash VARCHAR(255) NOT NULL
 );
 
--- Create the patients table
+-- Table des Patients
 CREATE TABLE patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
@@ -27,70 +35,54 @@ CREATE TABLE patients (
     password_hash VARCHAR(255) NOT NULL
 );
 
--- Create the clinic_staff table
+-- Table du Personnel de la Clinique
 CREATE TABLE clinic_staff (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(50) DEFAULT 'staff'
+    password_hash VARCHAR(255) NOT NULL
 );
 
--- Create the appointments table with foreign key constraints
--- ON DELETE SET NULL ensures that if a doctor or patient is deleted,
--- the appointment record is kept for historical purposes, but the link is severed.
+-- Table des Rendez-vous
+-- ON DELETE SET NULL : Si un médecin ou un patient est supprimé,
+-- la référence dans le rendez-vous devient NULL, préservant ainsi l'historique des rendez-vous.
 CREATE TABLE appointments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     date_time TIMESTAMP WITH TIME ZONE NOT NULL,
     patient_id UUID REFERENCES patients(id) ON DELETE SET NULL,
     doctor_id UUID REFERENCES doctors(id) ON DELETE SET NULL,
-    status VARCHAR(50) DEFAULT 'En attente' -- e.g., 'En attente', 'Confirmé', 'Annulé', 'Payée'
+    status VARCHAR(50) DEFAULT 'En attente'
 );
 
--- --- SEED DATA ---
+-- Insertion des données d'exemple
 
--- Insert sample doctors
--- Passwords are all 'password123' hashed with bcrypt (cost factor 10)
-INSERT INTO doctors (full_name, specialty, email, password_hash) VALUES
-('Dr. Alice Martin', 'Cardiologie', 'alice.martin@clinic.com', '$2a$10$3zX.o.m4.hS.d7Y.z.jS9uA2wL9c6P.K9QyL.jE1kI3oN6I.oO/y'),
-('Dr. Bernard Dubois', 'Pédiatrie', 'bernard.dubois@clinic.com', '$2a$10$3zX.o.m4.hS.d7Y.z.jS9uA2wL9c6P.K9QyL.jE1kI3oN6I.oO/y'),
-('Dr. Chloé Lambert', 'Dermatologie', 'chloe.lambert@clinic.com', '$2a$10$3zX.o.m4.hS.d7Y.z.jS9uA2wL9c6P.K9QyL.jE1kI3oN6I.oO/y');
+-- Note sur les mots de passe :
+-- Tous les utilisateurs (médecins, patients, personnel) partagent le même mot de passe
+-- pour la simplicité de la démonstration : "password123".
+-- Le hash a été généré avec bcrypt (cost factor 10).
+-- Hash: '$2a$10$w4B.g5hY2L9igVTTCEQkReNnSfxoqkMHYXwTPA9m9KDCcw2aSkwD.'
 
--- Insert sample patients
-INSERT INTO patients (full_name, email, password_hash) VALUES
-('Jean Dupont', 'jean.dupont@email.com', '$2a$10$3zX.o.m4.hS.d7Y.z.jS9uA2wL9c6P.K9QyL.jE1kI3oN6I.oO/y'),
-('Marie Curie', 'marie.curie@email.com', '$2a$10$3zX.o.m4.hS.d7Y.z.jS9uA2wL9c6P.K9QyL.jE1kI3oN6I.oO/y'),
-('Pierre Martin', 'pierre.martin@email.com', '$2a$10$3zX.o.m4.hS.d7Y.z.jS9uA2wL9c6P.K9QyL.jE1kI3oN6I.oO/y');
+-- Insertion des médecins
+INSERT INTO doctors (id, full_name, specialty, email, password_hash) VALUES
+('5915446d-9c3f-4d43-9a4c-530999581f14', 'Dr. Alice Martin', 'Cardiologie', 'alice.martin@clinic.com', '$2a$10$w4B.g5hY2L9igVTTCEQkReNnSfxoqkMHYXwTPA9m9KDCcw2aSkwD.'),
+('ef1d8e6a-7f6c-4b59-9b43-69016913e2e8', 'Dr. Bernard Dubois', 'Pédiatrie', 'bernard.dubois@clinic.com', '$2a$10$w4B.g5hY2L9igVTTCEQkReNnSfxoqkMHYXwTPA9m9KDCcw2aSkwD.'),
+('c85e28a9-4089-41a3-8f7d-249e1a8e1e33', 'Dr. Chloé Lambert', 'Dermatologie', 'chloe.lambert@clinic.com', '$2a$10$w4B.g5hY2L9igVTTCEQkReNnSfxoqkMHYXwTPA9m9KDCcw2aSkwD.');
 
--- Insert sample clinic staff
-INSERT INTO clinic_staff (full_name, email, password_hash, role) VALUES
-('Admin Sophie', 'sophie.admin@clinic.com', '$2a$10$3zX.o.m4.hS.d7Y.z.jS9uA2wL9c6P.K9QyL.jE1kI3oN6I.oO/y', 'clinic_staff');
+-- Insertion des patients
+INSERT INTO patients (id, full_name, email, password_hash) VALUES
+('b238a1a3-6e3e-4e48-9f37-14e3e3e3e3e3', 'Jean Valjean', 'jean.valjean@example.com', '$2a$10$w4B.g5hY2L9igVTTCEQkReNnSfxoqkMHYXwTPA9m9KDCcw2aSkwD.'),
+('a123b456-c789-d012-e345-f67890123456', 'Marie Curie', 'marie.curie@example.com', '$2a$10$w4B.g5hY2L9igVTTCEQkReNnSfxoqkMHYXwTPA9m9KDCcw2aSkwD.');
 
--- Insert sample appointments
--- We will fetch the IDs of the doctors and patients we just inserted to create valid appointments.
-DO $$
-DECLARE
-    dr_martin_id UUID;
-    dr_dubois_id UUID;
-    patient_jean_id UUID;
-    patient_marie_id UUID;
-BEGIN
-    -- Get IDs
-    SELECT id INTO dr_martin_id FROM doctors WHERE email = 'alice.martin@clinic.com';
-    SELECT id INTO dr_dubois_id FROM doctors WHERE email = 'bernard.dubois@clinic.com';
-    SELECT id INTO patient_jean_id FROM patients WHERE email = 'jean.dupont@email.com';
-    SELECT id INTO patient_marie_id FROM patients WHERE email = 'marie.curie@email.com';
+-- Insertion du personnel de la clinique
+INSERT INTO clinic_staff (id, full_name, email, password_hash) VALUES
+('d47a6157-ba79-4509-b655-e7f0b8e61280', 'Admin Clinique', 'admin@clinic.com', '$2a$10$w4B.g5hY2L9igVTTCEQkReNnSfxoqkMHYXwTPA9m9KDCcw2aSkwD.');
 
-    -- Insert appointments
-    INSERT INTO appointments (doctor_id, patient_id, date_time, status) VALUES
-    (dr_martin_id, patient_jean_id, NOW() + INTERVAL '3 days', 'Confirmé'),
-    (dr_dubois_id, patient_marie_id, NOW() + INTERVAL '5 days', 'En attente'),
-    (dr_martin_id, patient_marie_id, NOW() - INTERVAL '10 days', 'Payée');
-END $$;
+-- Insertion des rendez-vous
+-- Les dates sont définies pour être dans le futur pour les tests.
+INSERT INTO appointments (date_time, patient_id, doctor_id, status) VALUES
+(NOW() + INTERVAL '3 day', 'b238a1a3-6e3e-4e48-9f37-14e3e3e3e3e3', '5915446d-9c3f-4d43-9a4c-530999581f14', 'Confirmé'),
+(NOW() + INTERVAL '5 day', 'a123b456-c789-d012-e345-f67890123456', 'c85e28a9-4089-41a3-8f7d-249e1a8e1e33', 'En attente'),
+(NOW() - INTERVAL '10 day', 'b238a1a3-6e3e-4e48-9f37-14e3e3e3e3e3', '5915446d-9c3f-4d43-9a4c-530999581f14', 'Payée');
 
-
--- Add indexes for performance on foreign keys
-CREATE INDEX idx_appointments_patient_id ON appointments(patient_id);
-CREATE INDEX idx_appointments_doctor_id ON appointments(doctor_id);
-
--- --- END OF SCRIPT ---
+-- Affiche un message de succès
+\echo "Toutes les tables ont été créées et les données d'exemple ont été insérées avec succès."
