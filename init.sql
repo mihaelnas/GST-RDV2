@@ -1,13 +1,25 @@
--- Ce script initialise la base de données pour la clinique.
--- Il supprime les anciennes tables si elles existent et les recrée avec des données de départ.
+-- Ce script initialise la base de données, supprime les anciennes tables et en crée de nouvelles.
+-- Il insère également des données de démarrage pour les tests et la démonstration.
 
--- Supprimer les tables existantes dans le bon ordre pour éviter les erreurs de contrainte de clé étrangère.
+-- Supprimer les anciennes tables si elles existent pour garantir un démarrage propre
 DROP TABLE IF EXISTS appointments;
-DROP TABLE IF EXISTS clinic_staff;
 DROP TABLE IF EXISTS doctors;
 DROP TABLE IF EXISTS patients;
+DROP TABLE IF EXISTS clinic_staff;
 
--- Création de la table des Médecins
+-- Activer l'extension pour générer des UUIDs
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Création de la table pour le personnel de la clinique
+CREATE TABLE clinic_staff (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    full_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Création de la table pour les médecins
 CREATE TABLE doctors (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
@@ -17,7 +29,7 @@ CREATE TABLE doctors (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Création de la table des Patients
+-- Création de la table pour les patients
 CREATE TABLE patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
@@ -26,18 +38,7 @@ CREATE TABLE patients (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Création de la table du Personnel de la Clinique
-CREATE TABLE clinic_staff (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    full_name VARCHAR(255) NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(50) NOT NULL DEFAULT 'clinic_staff',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
-
--- Création de la table des Rendez-vous
--- ON DELETE SET NULL: si un patient ou un médecin est supprimé, le rendez-vous est conservé mais la référence est supprimée.
+-- Création de la table pour les rendez-vous
 CREATE TABLE appointments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     date_time TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -48,31 +49,74 @@ CREATE TABLE appointments (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Insertion des données initiales
 
--- Mot de passe pour tous les utilisateurs : "password"
--- Hash (bcrypt, coût 10): $2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q
+-- --- Insertion des données de démarrage ---
 
--- Insertion du personnel de la clinique
-INSERT INTO clinic_staff (id, full_name, email, password_hash) VALUES
-('00000000-0000-0000-0000-000000000001', 'Admin Clinique', 'staff@clinic.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q');
+-- Mot de passe unique pour tous les utilisateurs de test: "password"
+-- Le hash bcrypt correspondant est: '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q'
+-- Vous pouvez le générer avec: const hash = await bcrypt.hash('password', 10);
+-- Note: les IDs sont générés aléatoirement par la base de données.
 
--- Insertion des médecins
-INSERT INTO doctors (id, full_name, specialty, email, password_hash) VALUES
-('c85e28a9-4089-41a3-8f7d-249e1a8e1e33', 'Dr. Chloé Lambert', 'Cardiologie', 'chloe.lambert@clinic.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q'),
-('5915446d-9c3f-4d43-9a4c-530999581f14', 'Dr. Alice Martin', 'Dermatologie', 'alice.martin@clinic.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q');
+BEGIN;
 
--- Insertion des patients
-INSERT INTO patients (id, full_name, email, password_hash) VALUES
-('a123b456-c789-d012-e345-f67890123456', 'Marie Curie', 'marie.curie@email.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q'),
-('b238a1a3-6e3e-4e48-9f37-14e3e3e3e3e3', 'Jean Valjean', 'jean.valjean@email.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q');
+DO $$
+DECLARE
+    staff_pass_hash VARCHAR := '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q';
 
--- Insertion des rendez-vous
--- Assurez-vous que les UUIDs correspondent à ceux des médecins et patients ci-dessus.
-INSERT INTO appointments (date_time, patient_id, doctor_id, status, duration_minutes) VALUES
--- Rendez-vous Passé et Payé
-(NOW() - INTERVAL '3 day', 'b238a1a3-6e3e-4e48-9f37-14e3e3e3e3e3', '5915446d-9c3f-4d43-9a4c-530999581f14', 'Payée', 30),
--- Rendez-vous à venir Confirmé
-(NOW() + INTERVAL '2 day', 'b238a1a3-6e3e-4e48-9f37-14e3e3e3e3e3', '5915446d-9c3f-4d43-9a4c-530999581f14', 'Confirmé', 30),
--- Rendez-vous à venir En attente
-(NOW() + INTERVAL '4 day', 'a123b456-c789-d012-e345-f67890123456', 'c85e28a9-4089-41a3-8f7d-249e1a8e1e33', 'En attente', 30);
+    -- Déclaration des variables pour les médecins
+    doctor_alice_id UUID;
+    doctor_chloe_id UUID;
+    doctor_name_alice VARCHAR := 'Dr. Alice Martin';
+    doctor_specialty_alice VARCHAR := 'Cardiologie';
+    doctor_email_alice VARCHAR := 'alice.martin@clinique.dev';
+
+    doctor_name_chloe VARCHAR := 'Dr. Chloé Lambert';
+    doctor_specialty_chloe VARCHAR := 'Pédiatrie';
+    doctor_email_chloe VARCHAR := 'chloe.lambert@clinique.dev';
+    
+    -- Déclaration des variables pour les patients
+    patient_marie_id UUID;
+    patient_jean_id UUID;
+    patient_name_marie VARCHAR := 'Marie Curie';
+    patient_email_marie VARCHAR := 'marie.curie@email.dev';
+
+    patient_name_jean VARCHAR := 'Jean Valjean';
+    patient_email_jean VARCHAR := 'jean.valjean@email.dev';
+
+BEGIN
+    -- Insertion du personnel de la clinique
+    INSERT INTO clinic_staff (full_name, email, password_hash) VALUES
+    ('Admin Clinique', 'admin@clinique.dev', staff_pass_hash);
+
+    -- Insertion des médecins et récupération de leurs IDs
+    INSERT INTO doctors (full_name, specialty, email, password_hash) VALUES
+    (doctor_name_alice, doctor_specialty_alice, doctor_email_alice, staff_pass_hash) RETURNING id INTO doctor_alice_id;
+
+    INSERT INTO doctors (full_name, specialty, email, password_hash) VALUES
+    (doctor_name_chloe, doctor_specialty_chloe, doctor_email_chloe, staff_pass_hash) RETURNING id INTO doctor_chloe_id;
+
+    -- Insertion des patients et récupération de leurs IDs
+    INSERT INTO patients (full_name, email, password_hash) VALUES
+    (patient_name_marie, patient_email_marie, staff_pass_hash) RETURNING id INTO patient_marie_id;
+    
+    INSERT INTO patients (full_name, email, password_hash) VALUES
+    (patient_name_jean, patient_email_jean, staff_pass_hash) RETURNING id INTO patient_jean_id;
+
+    -- Insertion des rendez-vous en utilisant les IDs récupérés
+    INSERT INTO appointments (doctor_id, patient_id, date_time, status, duration_minutes) VALUES
+    (doctor_alice_id, patient_jean_id, NOW() + INTERVAL '7 days', 'Payée', 30),
+    (doctor_alice_id, patient_jean_id, NOW() + INTERVAL '20 days', 'Confirmé', 30),
+    (doctor_chloe_id, patient_marie_id, NOW() + INTERVAL '22 days', 'En attente', 30);
+END $$;
+
+COMMIT;
+
+-- Afficher les tables pour vérifier (optionnel)
+\echo 'Table clinic_staff:'
+SELECT * FROM clinic_staff;
+\echo 'Table doctors:'
+SELECT * FROM doctors;
+\echo 'Table patients:'
+SELECT * FROM patients;
+\echo 'Table appointments:'
+SELECT * FROM appointments;
