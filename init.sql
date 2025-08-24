@@ -1,13 +1,15 @@
--- Drop existing tables in reverse order of creation to avoid foreign key constraints
-DROP TABLE IF EXISTS appointments;
+-- Drop existing tables to ensure a clean slate.
+-- The `IF EXISTS` clause prevents errors if the tables don't exist.
 DROP TABLE IF EXISTS doctor_absences;
 DROP TABLE IF EXISTS doctor_weekly_schedules;
-DROP TABLE IF EXISTS clinic_staff;
-DROP TABLE IF EXISTS doctors;
+DROP TABLE IF EXISTS appointments;
 DROP TABLE IF EXISTS patients;
+DROP TABLE IF EXISTS doctors;
+DROP TABLE IF EXISTS clinic_staff;
 
--- Create Patients Table
-CREATE TABLE patients (
+
+-- Table for clinic staff
+CREATE TABLE clinic_staff (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -15,7 +17,7 @@ CREATE TABLE patients (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create Doctors Table
+-- Table for doctors
 CREATE TABLE doctors (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
@@ -25,19 +27,16 @@ CREATE TABLE doctors (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create Clinic Staff Table
-CREATE TABLE clinic_staff (
+-- Table for patients
+CREATE TABLE patients (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     full_name VARCHAR(255) NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash VARCHAR(255) NOT NULL,
-    role VARCHAR(50) NOT NULL DEFAULT 'clinic_staff',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create Appointments Table
--- ON DELETE SET NULL: If a patient or doctor is deleted, their ID in the appointments table will be set to NULL,
--- preserving the appointment record without linking to a non-existent entity.
+-- Table for appointments
 CREATE TABLE appointments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     date_time TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -48,90 +47,43 @@ CREATE TABLE appointments (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create Doctor Weekly Schedules Table
--- Stores the recurring weekly availability for each doctor.
--- day_of_week: 1 for Monday, 7 for Sunday, following ISO 8601 standard.
+-- Table for Doctor's weekly recurring schedule
 CREATE TABLE doctor_weekly_schedules (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     doctor_id UUID NOT NULL REFERENCES doctors(id) ON DELETE CASCADE,
-    day_of_week INTEGER NOT NULL CHECK (day_of_week >= 1 AND day_of_week <= 7),
+    day_of_week INT NOT NULL CHECK (day_of_week >= 1 AND day_of_week <= 7), -- 1 for Monday, 7 for Sunday
     is_working_day BOOLEAN NOT NULL DEFAULT false,
     start_time TIME,
     end_time TIME,
-    UNIQUE(doctor_id, day_of_week) -- Ensures only one schedule entry per doctor per day
+    UNIQUE(doctor_id, day_of_week)
 );
 
--- Create Doctor Absences Table
--- Stores specific dates or times when a doctor is not available, overriding the weekly schedule.
+-- Table for Doctor's specific absences/days off
 CREATE TABLE doctor_absences (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     doctor_id UUID NOT NULL REFERENCES doctors(id) ON DELETE CASCADE,
     absence_date DATE NOT NULL,
     is_full_day BOOLEAN NOT NULL DEFAULT true,
-    start_time TIME,
-    end_time TIME,
-    reason TEXT
+    start_time TIME, -- For partial day absence
+    end_time TIME,   -- For partial day absence
+    reason VARCHAR(255)
 );
 
 
--- Hashed password for 'password' -> $2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q
--- Insert Sample Data
+-- Insert initial data
+-- Password for all users is 'password', hashed with bcrypt.
+-- Hash: $2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q
 INSERT INTO clinic_staff (full_name, email, password_hash) VALUES
-('Admin Clinique', 'admin@clinique.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q');
+('Admin Clinique', 'staff@clinic.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q');
 
-INSERT INTO doctors (full_name, specialty, email, password_hash) VALUES
-('Dr. Alice Martin', 'Cardiologie', 'alice.martin@clinique.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q'),
-('Dr. Bob Dupont', 'Pédiatrie', 'bob.dupont@clinique.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q');
+INSERT INTO doctors (id, full_name, specialty, email, password_hash) VALUES
+('52c3c9d1-0351-4ea6-970b-5ef0f212646c', 'Dr. Alice Martin', 'Cardiologie', 'alice.martin@clinic.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q'),
+('6ee53f10-f96a-4b53-b71b-c53f6fab3078', 'Dr. Bob Dupont', 'Pédiatrie', 'bob.dupont@clinic.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q');
 
-INSERT INTO patients (full_name, email, password_hash) VALUES
-('Jean Patient', 'jean.patient@email.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q'),
-('Marie Patiente', 'marie.patiente@email.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q');
+INSERT INTO patients (id, full_name, email, password_hash) VALUES
+('4c64a6e2-199a-4af3-8f2a-60a050c251c5', 'Jean Patient', 'jean.patient@email.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q'),
+('2b13c8ff-b372-4a6d-8190-e03c4c701511', 'Marie Patiente', 'marie.patiente@email.com', '$2a$10$3g0.iY33Tz6a.V5F/D0bUO7N6sJAPtM2/jZJghIuCElUWzdoYzz.q');
 
--- Insert default weekly schedules for doctors
-DO $$
-DECLARE
-    alice_id UUID;
-    bob_id UUID;
-BEGIN
-    SELECT id INTO alice_id FROM doctors WHERE email = 'alice.martin@clinique.com';
-    SELECT id INTO bob_id FROM doctors WHERE email = 'bob.dupont@clinique.com';
-
-    -- Dr. Alice Martin's Schedule
-    INSERT INTO doctor_weekly_schedules (doctor_id, day_of_week, is_working_day, start_time, end_time) VALUES
-    (alice_id, 1, true, '09:00', '17:00'), -- Monday
-    (alice_id, 2, true, '09:00', '17:00'), -- Tuesday
-    (alice_id, 3, false, NULL, NULL),     -- Wednesday
-    (alice_id, 4, true, '10:00', '18:00'), -- Thursday
-    (alice_id, 5, true, '09:00', '13:00'), -- Friday
-    (alice_id, 6, false, NULL, NULL),     -- Saturday
-    (alice_id, 7, false, NULL, NULL);     -- Sunday
-
-    -- Dr. Bob Dupont's Schedule
-    INSERT INTO doctor_weekly_schedules (doctor_id, day_of_week, is_working_day, start_time, end_time) VALUES
-    (bob_id, 1, true, '08:30', '16:30'), -- Monday
-    (bob_id, 2, true, '08:30', '16:30'), -- Tuesday
-    (bob_id, 3, true, '08:30', '12:30'), -- Wednesday
-    (bob_id, 4, true, '08:30', '16:30'), -- Thursday
-    (bob_id, 5, false, NULL, NULL),     -- Friday
-    (bob_id, 6, false, NULL, NULL),     -- Saturday
-    (bob_id, 7, false, NULL, NULL);     -- Sunday
-END $$;
-
-
--- Insert sample appointments
-DO $$
-DECLARE
-    alice_id UUID;
-    bob_id UUID;
-    jean_id UUID;
-    marie_id UUID;
-BEGIN
-    SELECT id INTO alice_id FROM doctors WHERE email = 'alice.martin@clinique.com';
-    SELECT id INTO bob_id FROM doctors WHERE email = 'bob.dupont@clinique.com';
-    SELECT id INTO jean_id FROM patients WHERE email = 'jean.patient@email.com';
-    SELECT id INTO marie_id FROM patients WHERE email = 'marie.patiente@email.com';
-
-    INSERT INTO appointments (date_time, patient_id, doctor_id, status) VALUES
-    (NOW() + INTERVAL '3 day', jean_id, alice_id, 'Confirmé'),
-    (NOW() + INTERVAL '5 day', marie_id, bob_id, 'En attente');
-END $$;
+INSERT INTO appointments (date_time, patient_id, doctor_id, status, duration_minutes) VALUES
+('2025-08-27 09:00:00+02', '4c64a6e2-199a-4af3-8f2a-60a050c251c5', '52c3c9d1-0351-4ea6-970b-5ef0f212646c', 'Confirmé', 30),
+('2025-08-29 14:30:00+02', '2b13c8ff-b372-4a6d-8190-e03c4c701511', '6ee53f10-f96a-4b53-b71b-c53f6fab3078', 'En attente', 30);

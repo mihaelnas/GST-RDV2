@@ -2,7 +2,7 @@
  * @fileOverview Service layer for appointment-related business logic.
  */
 import pool from '@/lib/db';
-import type { AppointmentDetails, AppointmentCreateInput, BookedAppointment } from '@/ai/flows/appointmentManagementFlow';
+import type { AppointmentDetails, AppointmentCreateInput, BookedAppointment, AppointmentStatus } from '@/ai/flows/appointmentManagementFlow';
 
 /**
  * Retrieves all appointments with patient and doctor details.
@@ -159,7 +159,7 @@ export async function createAppointment(data: Omit<AppointmentCreateInput, 'date
  * @param {string} status - The new status.
  * @returns {Promise<boolean>}
  */
-export async function updateAppointmentStatus(appointmentId: string, status: string): Promise<boolean> {
+export async function updateAppointmentStatus(appointmentId: string, status: AppointmentStatus): Promise<boolean> {
   const query = {
     text: 'UPDATE appointments SET status = $1 WHERE id = $2',
     values: [status, appointmentId],
